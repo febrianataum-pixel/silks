@@ -13,6 +13,7 @@ export interface UserAccount {
   createdAt: string;
   avatar?: string;
   firebaseApiKey?: string;
+  firebaseProjectId?: string;
 }
 
 export interface BantuanLKS {

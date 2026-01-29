@@ -33,6 +33,8 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
 
+  const defaultLogoBlora = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Coat_of_arms_of_Blora_Regency.svg/1200px-Coat_of_arms_of_Blora_Regency.svg.png";
+
   // Shortcut Handler: Auto-open LKS from Dashboard
   useEffect(() => {
     if (initialSelectedId) {
@@ -171,6 +173,31 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
     try { await html2pdf().set(options).from(element).save(); } catch (err) { alert('Gagal download.'); } finally { setIsGenerating(false); }
+  };
+
+  const handleDownloadRaportPDF = async () => {
+    const element = document.getElementById('printable-raport');
+    if (!element || !reportLks) return;
+    setIsGenerating(true);
+    const options = {
+      margin: 10,
+      filename: `Raport_LKS_${reportLks.nama.replace(/\s+/g, '_')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    try { 
+      await html2pdf().set(options).from(element).save(); 
+    } catch (err) { 
+      alert('Gagal mengunduh PDF.'); 
+    } finally { 
+      setIsGenerating(false); 
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   return (
@@ -588,49 +615,193 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
       {reportLks && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setReportLks(null)}></div>
-          <div className="relative bg-white w-full max-w-4xl h-[92vh] rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
-             <div className="p-8 border-b flex items-center justify-between bg-slate-50/50 no-print">
-                <h3 className="font-black text-xl text-slate-800">Pratinjau Raport LKS</h3>
-                <button onClick={() => setReportLks(null)} className="p-3 bg-white border rounded-xl hover:bg-slate-100 transition-all shadow-sm"><X/></button>
-             </div>
-             <div id="printable-raport" className="flex-1 overflow-y-auto p-16 arial-force bg-white text-black">
-                <div className="text-center border-b-4 border-double border-black pb-8 mb-10 arial-force">
-                   <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
-                   <h2 className="text-2xl font-black uppercase arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
-                   <p className="text-[10pt] mt-1 italic arial-force">Jl. Pemuda No.16 A Blora 58215, Telp: (0296) 5298541</p>
+          <div className="relative bg-white w-full max-w-5xl h-[95vh] rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
+             <div className="p-8 border-b flex items-center justify-between bg-white no-print">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg"><FileBarChart size={24}/></div>
+                   <div>
+                     <h3 className="font-black text-xl text-slate-800">Pratinjau Raport LKS</h3>
+                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Seluruh Indikator Terverifikasi</p>
+                   </div>
                 </div>
+                <div className="flex gap-3">
+                   <button 
+                    onClick={handleDownloadRaportPDF} 
+                    disabled={isGenerating}
+                    className="flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 disabled:opacity-50"
+                   >
+                     {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />}
+                     UNDUH PDF RAPORT
+                   </button>
+                   <button onClick={() => setReportLks(null)} className="p-3 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all"><X size={24} className="text-slate-400"/></button>
+                </div>
+             </div>
+             
+             {/* Printable Raport Area */}
+             <div id="printable-raport" className="flex-1 overflow-y-auto p-12 md:p-16 arial-force bg-white text-black">
+                {/* Kop Surat */}
+                <div className="text-center border-b-4 border-double border-black pb-8 mb-10 flex items-center gap-8 arial-force">
+                   <img src={defaultLogoBlora} alt="Logo Blora" className="h-24" />
+                   <div className="flex-1 text-center arial-force">
+                      <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
+                      <h2 className="text-2xl font-black uppercase arial-force leading-tight">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
+                      <p className="text-[10pt] mt-1 arial-force">Jl. Pemuda No.16 A Blora 58215, Telp: (0296) 5298541</p>
+                      <p className="text-[10pt] font-medium arial-force">Website : dinsos.blorakab.go.id / E-mail : dinsosp3a@blorakab.go.id</p>
+                   </div>
+                </div>
+
                 <div className="space-y-10 arial-force">
-                   <div className="flex justify-between items-end border-b-2 border-black pb-4 arial-force">
-                      <h4 className="text-3xl font-black uppercase arial-force leading-none">{reportLks.nama}</h4>
-                      <p className="text-3xl font-black text-indigo-600 arial-force">GRADE {reportLks.statusAkreditasi}</p>
+                   <div className="text-center space-y-2 arial-force">
+                      <h3 className="text-2xl font-black uppercase underline arial-force">PROFIL LENGKAP LEMBAGA KESEJAHTERAAN SOSIAL</h3>
+                      <p className="text-[11pt] font-bold arial-force">STATUS VERIFIKASI: {reportLks.statusAktif.toUpperCase()}</p>
                    </div>
-                   <div className="grid grid-cols-2 gap-12 arial-force">
-                      <div className="space-y-4 arial-force">
-                         <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force">I. Administrasi & Lokasi</p>
-                         <div className="space-y-2 text-[11pt] arial-force">
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Alamat</span> : {reportLks.alamat}</p>
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Wilayah</span> : {reportLks.desa}, {reportLks.kecamatan}</p>
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Status LKS</span> : {reportLks.statusAktif}</p>
-                           {reportLks.tahunAkreditasi && (
-                             <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Thn Akreditasi</span> : {reportLks.tahunAkreditasi}</p>
-                           )}
+
+                   {/* I. Identitas Umum */}
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">I. IDENTITAS UMUM & DOMISILI</p>
+                      <table className="w-full text-[11pt] arial-force">
+                         <tbody className="arial-force">
+                            <tr className="arial-force"><td className="w-48 font-bold arial-force">Nama Lembaga</td><td className="w-4 arial-force">:</td><td className="arial-force font-bold">{reportLks.nama}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force">Alamat Lengkap</td><td className="arial-force">:</td><td className="arial-force">{reportLks.alamat}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force">Desa / Kelurahan</td><td className="arial-force">:</td><td className="arial-force">{reportLks.desa}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force">Kecamatan</td><td className="arial-force">:</td><td className="arial-force">{reportLks.kecamatan}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force">No. Telepon Ketua</td><td className="arial-force">:</td><td className="arial-force">{reportLks.telpKetua}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force">Tempat/Tgl Berdiri</td><td className="arial-force">:</td><td className="arial-force">{reportLks.tempatPendirian}, {formatDate(reportLks.tanggalPendirian)}</td></tr>
+                         </tbody>
+                      </table>
+                   </div>
+
+                   {/* II. Pengurus */}
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">II. STRUKTUR PENGURUS INTI</p>
+                      <table className="w-full text-[10pt] border-collapse border border-black arial-force">
+                         <thead>
+                            <tr className="bg-slate-200 arial-force">
+                               <th className="border border-black p-2 arial-force">Jabatan</th>
+                               <th className="border border-black p-2 arial-force">Nama Lengkap</th>
+                               <th className="border border-black p-2 arial-force">No. Kontak / WhatsApp</th>
+                            </tr>
+                         </thead>
+                         <tbody className="arial-force">
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force text-center">Ketua</td>
+                               <td className="border border-black p-2 arial-force">{reportLks.pengurus.ketua.nama}</td>
+                               <td className="border border-black p-2 arial-force text-center">{reportLks.pengurus.ketua.tel}</td>
+                            </tr>
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force text-center">Sekretaris</td>
+                               <td className="border border-black p-2 arial-force">{reportLks.pengurus.sekretaris.nama}</td>
+                               <td className="border border-black p-2 arial-force text-center">{reportLks.pengurus.sekretaris.tel}</td>
+                            </tr>
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force text-center">Bendahara</td>
+                               <td className="border border-black p-2 arial-force">{reportLks.pengurus.bendahara.nama}</td>
+                               <td className="border border-black p-2 arial-force text-center">{reportLks.pengurus.bendahara.tel}</td>
+                            </tr>
+                         </tbody>
+                      </table>
+                   </div>
+
+                   {/* III. Legalitas */}
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">III. LEGALITAS & PERIZINAN FORMAL</p>
+                      <div className="grid grid-cols-2 gap-8 arial-force">
+                         <div className="space-y-2 arial-force">
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">Akte Notaris</span>: No. {reportLks.akteNotaris.nomor}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">Tgl Akte</span>: {formatDate(reportLks.akteNotaris.tanggal)}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">NPWP Lembaga</span>: {reportLks.npwp}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">SK Kemenkumham</span>: {reportLks.nomorSKKemenkumham}</p>
+                         </div>
+                         <div className="space-y-2 arial-force">
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">No. Tanda Daftar</span>: {reportLks.nomorTandaDaftar}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">Masa Berlaku TD</span>: {formatDate(reportLks.masaBerlakuTandaDaftar)}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">No. Izin Ops</span>: {reportLks.nomorIjinOperasional}</p>
+                            <p className="text-[10pt] arial-force"><span className="font-bold inline-block w-40 arial-force">Masa Berlaku IO</span>: {formatDate(reportLks.masaBerlakuIjinOperasional)}</p>
                          </div>
                       </div>
-                      <div className="space-y-4 arial-force">
-                         <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force">II. Legalitas Hukum</p>
-                         <div className="space-y-2 text-[11pt] arial-force">
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Notaris</span> : No. {reportLks.akteNotaris.nomor}</p>
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Tanda Daftar</span> : {reportLks.nomorTandaDaftar}</p>
-                           <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">NPWP</span> : {reportLks.npwp}</p>
-                         </div>
-                      </div>
                    </div>
+
+                   {/* IV. Kinerja & Klasifikasi */}
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">IV. KLASIFIKASI & STATUS KINERJA</p>
+                      <table className="w-full text-[10pt] arial-force border-collapse border border-black">
+                         <tbody className="arial-force">
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold w-48 arial-force">Status Akreditasi</td>
+                               <td className="border border-black p-2 arial-force font-black text-lg">GRADE {reportLks.statusAkreditasi} ({reportLks.tahunAkreditasi || 'N/A'})</td>
+                            </tr>
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force">Layanan Utama</td>
+                               <td className="border border-black p-2 arial-force">{reportLks.jenisBantuan}</td>
+                            </tr>
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force">Lingkup Kerja</td>
+                               <td className="border border-black p-2 arial-force">{reportLks.lingkupKerja} (Posisi: {reportLks.posisiLKS})</td>
+                            </tr>
+                            <tr className="arial-force">
+                               <td className="border border-black p-2 font-bold arial-force">Total Penerima Manfaat</td>
+                               <td className="border border-black p-2 arial-force font-bold">{reportLks.jumlahPM} Orang terdata</td>
+                            </tr>
+                         </tbody>
+                      </table>
+                   </div>
+
+                   {/* V. Riwayat Bantuan */}
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">V. RIWAYAT PENERIMAAN BANTUAN</p>
+                      <table className="w-full text-[9pt] border-collapse border border-black arial-force">
+                         <thead>
+                            <tr className="bg-slate-200 arial-force">
+                               <th className="border border-black p-2 arial-force">Tahun</th>
+                               <th className="border border-black p-2 arial-force">Jenis Bantuan / Nama Program</th>
+                               <th className="border border-black p-2 arial-force">Sumber Dana</th>
+                               <th className="border border-black p-2 arial-force">Nominal (Rp)</th>
+                            </tr>
+                         </thead>
+                         <tbody className="arial-force">
+                            {reportLks.riwayatBantuan.length > 0 ? reportLks.riwayatBantuan.map(b => (
+                               <tr key={b.id} className="arial-force text-center">
+                                  <td className="border border-black p-2 arial-force font-bold">{b.tahun}</td>
+                                  <td className="border border-black p-2 arial-force text-left">{b.jenis}</td>
+                                  <td className="border border-black p-2 arial-force">{b.sumber}</td>
+                                  <td className="border border-black p-2 arial-force font-bold text-right">{b.nominal.toLocaleString('id-ID')}</td>
+                               </tr>
+                            )) : (
+                               <tr className="arial-force">
+                                  <td colSpan={4} className="border border-black p-4 text-center italic arial-force">Belum ada riwayat bantuan tercatat.</td>
+                               </tr>
+                            )}
+                         </tbody>
+                      </table>
+                   </div>
+
+                   {/* VI. Deskripsi */}
                    <div className="arial-force space-y-4">
-                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force">III. Deskripsi Pelayanan</p>
-                      <div className="p-8 border border-black rounded-3xl italic text-[11pt] leading-relaxed text-justify arial-force">
-                        {reportLks.kegiatanSosial || 'Lembaga ini aktif dalam pelayanan kesejahteraan sosial sesuai lingkup kerjanya.'}
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-sm arial-force bg-slate-100 py-1">VI. RINGKASAN KEGIATAN SOSIAL</p>
+                      <div className="p-8 border border-black rounded-3xl italic text-[10.5pt] leading-relaxed text-justify arial-force min-h-[150px]">
+                        {reportLks.kegiatanSosial || 'Lembaga ini aktif dalam pelayanan kesejahteraan sosial sesuai bidang bantuannya dan mematuhi regulasi yang ditetapkan Dinas Sosial.'}
                       </div>
                    </div>
+
+                   {/* Penutup & Tanda Tangan */}
+                   <div className="mt-16 flex justify-between arial-force">
+                      <div className="text-center w-64 arial-force">
+                         <p className="text-[10pt] arial-force">Mengetahui,</p>
+                         <p className="font-bold text-[10pt] arial-force mt-1">Ketua {reportLks.nama}</p>
+                         <div className="h-24"></div>
+                         <p className="font-bold underline text-[10pt] arial-force">{reportLks.pengurus.ketua.nama}</p>
+                      </div>
+                      <div className="text-center w-64 arial-force">
+                         <p className="text-[10pt] arial-force">Blora, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
+                         <p className="font-bold text-[10pt] arial-force mt-1">Petugas Verifikator Dinsos,</p>
+                         <div className="h-24"></div>
+                         <p className="font-bold underline text-[10pt] arial-force">( ........................................ )</p>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="mt-20 text-[8pt] text-slate-400 italic text-center border-t pt-4 arial-force">
+                  Dokumen ini merupakan profil digital resmi yang dicetak melalui Sistem Informasi Manajemen LKS Kabupaten Blora.
                 </div>
              </div>
           </div>
