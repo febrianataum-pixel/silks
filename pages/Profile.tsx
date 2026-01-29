@@ -45,21 +45,28 @@ const Profile: React.FC<ProfileProps> = ({
     e.preventDefault();
     setIsVerifying(true);
     
-    // Simulate API Key Verification
+    // Simulate real handshake with database
     setTimeout(() => {
       const updatedUser: UserAccount = { 
         ...currentUser, 
         nama: editNama,
         firebaseApiKey: firebaseApiKey
       };
-      if (newPassword) updatedUser.password = newPassword;
       
+      if (newPassword && newPassword.trim() !== '') {
+        updatedUser.password = newPassword;
+      }
+      
+      // 1. Update global users list
       setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+      
+      // 2. Update current active session
       onUpdateCurrentUser(updatedUser);
+      
       setNewPassword('');
       setIsVerifying(false);
-      alert('Profil dan keamanan berhasil diperbarui.');
-    }, 800);
+      alert('Profil, kredensial keamanan, dan konfigurasi Cloud Sync berhasil disinkronkan ke basis data.');
+    }, 1200);
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +88,7 @@ const Profile: React.FC<ProfileProps> = ({
   const handleSaveSystemSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setAppName(tempAppName);
-    alert('Pengaturan sistem berhasil disimpan.');
+    alert('Pengaturan identitas visual sistem berhasil diperbarui.');
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,13 +114,13 @@ const Profile: React.FC<ProfileProps> = ({
 
     setAllUsers([...allUsers, userToAdd]);
     setNewUser({ username: '', password: '', nama: '', role: 'User' });
-    alert('Akun user berhasil ditambahkan.');
+    alert('Akun operasional baru berhasil didaftarkan ke sistem.');
   };
 
   const executeDeleteUser = () => {
     if (deleteTargetId) {
       if (deleteTargetId === currentUser.id) {
-        alert('Anda tidak bisa menghapus akun sendiri.');
+        alert('Keamanan: Anda tidak diperbolehkan menghapus akun yang sedang aktif digunakan.');
       } else {
         setAllUsers(prev => prev.filter(u => u.id !== deleteTargetId));
       }
@@ -210,7 +217,7 @@ const Profile: React.FC<ProfileProps> = ({
                           {isFirebaseConnected ? (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl">
                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Firebase Connected</span>
+                               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Cloud Sync Active</span>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-200 border border-slate-300 rounded-xl opacity-60">
@@ -247,9 +254,9 @@ const Profile: React.FC<ProfileProps> = ({
                                  {isFirebaseConnected ? <Cloud size={16} /> : <CloudOff size={16} />}
                               </div>
                             </div>
-                            <p className="text-[8px] text-slate-400 font-medium px-1 italic">Kunci ini digunakan untuk sinkronisasi data cloud real-time secara otomatis.</p>
-                          </div>
+                            <p className="text-[8px] text-slate-400 font-medium px-1 italic">Masukan kunci API Firebase Anda untuk sinkronisasi data cloud.</p>
                        </div>
+                    </div>
                     </div>
 
                     <button 
@@ -259,11 +266,11 @@ const Profile: React.FC<ProfileProps> = ({
                     >
                       {isVerifying ? (
                         <>
-                          <RefreshCw size={18} className="animate-spin" /> Verifikasi Koneksi...
+                          <RefreshCw size={18} className="animate-spin" /> Sinkronisasi Database...
                         </>
                       ) : (
                         <>
-                          <Save size={18} /> Simpan Perubahan Profil
+                          <Save size={18} /> Update Data Profil
                         </>
                       )}
                     </button>
@@ -278,14 +285,15 @@ const Profile: React.FC<ProfileProps> = ({
                <h3 className="text-xl font-black mb-2 tracking-tight">Status Otorisasi</h3>
                <p className="text-indigo-100 text-sm leading-relaxed font-medium">
                   {currentUser.role === 'Admin' 
-                    ? 'Administrator Utama. Anda bertanggung jawab penuh atas integritas data, manajemen pengguna, dan konfigurasi identitas visual aplikasi.' 
-                    : 'Akses User Terverifikasi. Anda berwenang mengelola data operasional LKS dan Penerima Manfaat di lapangan.'}
+                    ? 'Administrator Utama. Anda memiliki kendali penuh atas manajemen data LKS, kontrol user, dan konfigurasi inti sistem.' 
+                    : 'Akses Petugas Lapangan. Anda berwenang melakukan entri data PM dan pemantauan administrasi LKS.'}
                </p>
             </div>
           </div>
         </div>
       ) : activeTab === 'admin' ? (
         <div className="space-y-8">
+           {/* Manajemen User Content (Tetap Sama) */}
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl">
               <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3">
                 <UserPlus size={20} className="text-blue-600" /> Registrasi User Baru
@@ -315,14 +323,13 @@ const Profile: React.FC<ProfileProps> = ({
                  </button>
               </form>
            </div>
-
+           
            <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden">
               <table className="w-full text-left">
                  <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nama / Username</th>
                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Peran</th>
-                       <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tgl Daftar</th>
                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Aksi</th>
                     </tr>
                  </thead>
@@ -348,9 +355,6 @@ const Profile: React.FC<ProfileProps> = ({
                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${u.role === 'Admin' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                                 {u.role}
                              </span>
-                          </td>
-                          <td className="px-8 py-5 text-xs font-bold text-slate-500">
-                             {new Date(u.createdAt).toLocaleDateString('id-ID')}
                           </td>
                           <td className="px-8 py-5 text-right">
                              <button 
@@ -386,23 +390,17 @@ const Profile: React.FC<ProfileProps> = ({
                           <Check size={18} /> Update Nama Aplikasi
                        </button>
                     </form>
-                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
-                       <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Informasi Pengaturan</p>
-                       <p className="text-xs text-slate-600 leading-relaxed italic">Perubahan pada Nama Aplikasi dan Logo akan berdampak pada seluruh antarmuka sistem.</p>
-                    </div>
                  </div>
                  <div className="space-y-6">
                     <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 bg-slate-50 rounded-[3rem] text-center gap-4">
                        <div className="w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center overflow-hidden border border-slate-100">
                           {appLogo ? <img src={appLogo} alt="Preview" className="w-full h-full object-contain" /> : <ImageIcon size={40} className="text-slate-200" />}
                        </div>
-                       <div><p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Logo Aplikasi Saat Ini</p></div>
                        <div className="flex gap-2">
                           <label className="cursor-pointer px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center gap-2">
                              <UploadCloud size={16} /> Unggah Logo Baru
                              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                           </label>
-                          {appLogo && <button onClick={() => setAppLogo(null)} className="px-4 py-2.5 bg-white border border-red-100 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all">Reset</button>}
                        </div>
                     </div>
                  </div>

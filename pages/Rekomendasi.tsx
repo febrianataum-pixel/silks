@@ -7,11 +7,12 @@ declare const html2pdf: any;
 
 interface RekomendasiPageProps {
   lksData: LKS[];
+  letters: LetterRecord[];
+  setLetters: React.Dispatch<React.SetStateAction<LetterRecord[]>>;
   onNotify?: (action: string, target: string) => void;
 }
 
-const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) => {
-  const [letters, setLetters] = useState<LetterRecord[]>([]);
+const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, setLetters, onNotify }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingLetterId, setEditingLetterId] = useState<string | null>(null);
@@ -92,11 +93,11 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) 
     if (editingLetterId) {
       setLetters(prev => prev.map(l => l.id === editingLetterId ? (letterToSave as any) : l));
       if (onNotify) onNotify('Mengupdate Surat', formData.nomorSurat);
-      alert('Perubahan surat berhasil disimpan.');
+      alert('Perubahan surat berhasil disimpan secara permanen.');
     } else {
       setLetters(prev => [letterToSave as any, ...prev]);
       if (onNotify) onNotify('Membuat Surat', formData.nomorSurat);
-      alert('Surat baru berhasil diarsipkan.');
+      alert('Surat baru berhasil diarsipkan secara permanen.');
     }
 
     setIsCreating(false);
@@ -136,7 +137,7 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) 
     };
     setLetters(prev => [duplicatedLetter, ...prev]);
     if (onNotify) onNotify('Duplikasi Surat', letter.nomorSurat);
-    alert('Surat berhasil diduplikasi.');
+    alert('Surat berhasil diduplikasi dan disimpan.');
   };
 
   const executeDelete = () => {
@@ -364,7 +365,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) 
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmId(null)}></div>
@@ -380,13 +380,7 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) 
         </div>
       )}
 
-      <style>{`
-        .arial-force { font-family: Arial, Helvetica, sans-serif !important; }
-        .letter-body p { margin-bottom: 0.5rem; }
-        .letter-body ol, .letter-body ul { margin-top: 0.5rem; margin-bottom: 0.5rem; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        @media print { #print-letter-surface { border: none !important; box-shadow: none !important; } }
-      `}</style>
+      <style>{`.arial-force { font-family: Arial, Helvetica, sans-serif !important; } .letter-body p { margin-bottom: 0.5rem; } .letter-body ol, .letter-body ul { margin-top: 0.5rem; margin-bottom: 0.5rem; } .no-scrollbar::-webkit-scrollbar { display: none; } @media print { #print-letter-surface { border: none !important; box-shadow: none !important; } }`}</style>
     </div>
   );
 };
