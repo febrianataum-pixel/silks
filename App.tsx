@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
 import AdministrasiPage from './pages/Administrasi';
@@ -10,6 +10,10 @@ import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
 import { MOCK_LKS, MOCK_PM, MOCK_USERS } from './constants';
 import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './types';
+
+// Firebase Imports
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'rekomendasi' | 'profile';
 
@@ -26,15 +30,10 @@ const App: React.FC = () => {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
-  // Navigation Context for Shortcuts
   const [navContext, setNavContext] = useState<{ id: string; type: 'LKS' | 'PM' } | null>(null);
 
-  // 1. App Identity State
   const [appName, setAppName] = useState(() => localStorage.getItem('si-lks-appname') || 'SI-LKS BLORA');
   const [appLogo, setAppLogo] = useState<string | null>(() => localStorage.getItem('si-lks-applogo'));
-
-  // 2. Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('si-lks-islogged') === 'true');
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('si-lks-currentuser');
@@ -45,7 +44,6 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : MOCK_USERS;
   });
 
-  // 3. App Data (LKS, PM, and Letters)
   const [lksData, setLksData] = useState<LKS[]>(() => {
     const saved = localStorage.getItem('si-lks-lksdata');
     return saved ? JSON.parse(saved) : MOCK_LKS;
@@ -59,7 +57,11 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Database Persistence Effect
+  // Cloud Sync State
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const isIncomingUpdate = useRef(false);
+
+  // Persistence to LocalStorage (untuk mode offline)
   useEffect(() => {
     localStorage.setItem('si-lks-appname', appName);
     if (appLogo) localStorage.setItem('si-lks-applogo', appLogo);
@@ -69,15 +71,96 @@ const App: React.FC = () => {
     localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
     localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
     if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
-    else localStorage.removeItem('si-lks-currentuser');
   }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser]);
 
-  // Notifications State
+  // --- FIREBASE REALTIME CLOUD SYNC LOGIC ---
+  useEffect(() => {
+    if (!currentUser?.firebaseApiKey || !currentUser?.firebaseProjectId) return;
+
+    const firebaseConfig = {
+      apiKey: currentUser.firebaseApiKey,
+      projectId: currentUser.firebaseProjectId,
+      appId: "si-lks-blora-sync"
+    };
+
+    try {
+      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      const db = getFirestore(app);
+      const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
+
+      // 1. Mendengarkan perubahan dari Cloud (Realtime Listener)
+      const unsubscribe = onSnapshot(dataDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const remoteData = docSnap.data();
+          
+          // Tandai bahwa update ini berasal dari cloud agar tidak di-push balik
+          isIncomingUpdate.current = true;
+          
+          if (remoteData.lks) setLksData(remoteData.lks);
+          if (remoteData.pm) setPmData(remoteData.pm);
+          if (remoteData.letters) setLettersData(remoteData.letters);
+          if (remoteData.appName) setAppName(remoteData.appName);
+          
+          setSyncStatus('idle');
+          console.log("Data Cloud disinkronkan ke lokal.");
+        }
+      }, (error) => {
+        console.error("Firebase Sync Error:", error);
+        setSyncStatus('error');
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("Firebase Init Error:", err);
+      setSyncStatus('error');
+    }
+  }, [currentUser?.firebaseApiKey, currentUser?.firebaseProjectId]);
+
+  // 2. Mendorong perubahan lokal ke Cloud (Publisher)
+  useEffect(() => {
+    if (!currentUser?.firebaseApiKey || !currentUser?.firebaseProjectId) return;
+    
+    // Jika data baru saja datang dari cloud, jangan kirim balik (loop prevention)
+    if (isIncomingUpdate.current) {
+      isIncomingUpdate.current = false;
+      return;
+    }
+
+    // Debounce: Tunggu 2 detik setelah perubahan terakhir selesai baru kirim ke cloud
+    const timer = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        const firebaseConfig = {
+          apiKey: currentUser.firebaseApiKey,
+          projectId: currentUser.firebaseProjectId,
+        };
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        const db = getFirestore(app);
+        const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
+
+        await setDoc(dataDocRef, {
+          lks: lksData,
+          pm: pmData,
+          letters: lettersData,
+          appName: appName,
+          lastUpdated: new Date().toISOString(),
+          updatedBy: currentUser.nama
+        }, { merge: true });
+
+        setSyncStatus('idle');
+        console.log("Data lokal berhasil didorong ke Cloud.");
+      } catch (err) {
+        console.error("Cloud Push Error:", err);
+        setSyncStatus('error');
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [lksData, pmData, lettersData, appName]);
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  const isFirebaseConnected = !!currentUser?.firebaseApiKey;
 
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
@@ -91,16 +174,6 @@ const App: React.FC = () => {
     };
     setNotifications(prev => [newNotif, ...prev].slice(0, 20));
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setShowNotifDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -149,7 +222,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-900 text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 no-print ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="h-full flex flex-col relative">
           <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 bg-blue-600 rounded-full items-center justify-center text-white border-4 border-slate-50 z-50 hover:scale-110 transition-transform shadow-lg">
@@ -191,7 +263,7 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-0 overflow-hidden relative">
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 no-print">
           <div className="flex items-center gap-6">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-600 transition-colors"><Menu size={24} /></button>
@@ -201,14 +273,24 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p></div>
                 <div className="w-px h-3 bg-slate-200"></div>
                 <div className="flex items-center gap-1.5">
-                  {isFirebaseConnected ? <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Terhubung</p></> : <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Offline</p></>}
+                  {currentUser?.firebaseApiKey ? (
+                    syncStatus === 'syncing' ? (
+                      <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Sinkronisasi Cloud...</p></>
+                    ) : syncStatus === 'error' ? (
+                      <><CloudOff size={10} className="text-red-500" /><p className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Gagal Sinkron</p></>
+                    ) : (
+                      <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Aktif: Realtime</p></>
+                    )
+                  ) : (
+                    <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Mode Lokal</p></>
+                  )}
                 </div>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-5">
             <div className="relative" ref={notifRef}>
-              <button onClick={() => {setShowNotifDropdown(!showNotifDropdown); if(!showNotifDropdown) setNotifications(prev => prev.map(n => ({...n, isRead: true})));}} className={`relative p-3 rounded-2xl transition-all ${showNotifDropdown ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}><Bell size={22} />{notifications.filter(n => !n.isRead).length > 0 && <span className="absolute top-2.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">{notifications.filter(n => !n.isRead).length}</span>}</button>
+              <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`relative p-3 rounded-2xl transition-all ${showNotifDropdown ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}><Bell size={22} />{notifications.filter(n => !n.isRead).length > 0 && <span className="absolute top-2.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">{notifications.filter(n => !n.isRead).length}</span>}</button>
               {showNotifDropdown && (
                 <div className="absolute right-0 mt-4 w-96 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden z-[100] animate-in slide-in-from-top-4 duration-300">
                   <div className="p-6 bg-slate-900 text-white"><h4 className="font-black text-sm uppercase tracking-tight">Log Aktivitas</h4><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Data Real-time</p></div>
@@ -238,8 +320,6 @@ const App: React.FC = () => {
       </main>
 
       {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/60 lg:hidden z-40 backdrop-blur-md no-print animate-in fade-in duration-300" onClick={() => setIsSidebarOpen(false)}></div>}
-
-      <style>{`.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
     </div>
   );
 };

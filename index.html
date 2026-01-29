@@ -12,7 +12,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-        /* Custom Leaflet overrides */
         .leaflet-container { font-family: 'Inter', sans-serif; border-radius: 2rem; }
         .leaflet-control-zoom { border: none !important; box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important; }
         .leaflet-bar a { background-color: #fff !important; color: #1e293b !important; border: 1px solid #e2e8f0 !important; }
@@ -22,6 +21,8 @@
             body { background: white !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 <script type="importmap">
 {
@@ -30,7 +31,10 @@
     "recharts": "https://esm.sh/recharts@^3.7.0",
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/"
   }
 }
 </script>
@@ -39,6 +43,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-<script type="module" src="/index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Shield, Trash2, UserPlus, Settings, Save, Image as ImageIcon, Camera, AlertTriangle, RefreshCw, Download, Upload, Share2, Cloud, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { User, Shield, Trash2, UserPlus, Settings, Save, Image as ImageIcon, Camera, AlertTriangle, RefreshCw, Download, Upload, Share2, Cloud, ShieldCheck, CheckCircle2, Info } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface ProfileProps {
@@ -81,8 +81,8 @@ const Profile: React.FC<ProfileProps> = ({
       setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
       onUpdateCurrentUser(updatedUser);
       setIsSyncing(false);
-      alert('Cloud Sync Berhasil Diaktifkan! Data akan mulai disinkronisasi ke server Firebase.');
-    }, 2000);
+      alert('Konfigurasi Cloud Sync Disimpan! Jika Project ID benar, data akan otomatis sinkron.');
+    }, 1500);
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,7 +191,6 @@ const Profile: React.FC<ProfileProps> = ({
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-      {/* Tab Header */}
       <div className="flex bg-white p-2 rounded-[2rem] border border-slate-100 shadow-sm w-fit overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('profile')} className={`px-8 py-3 rounded-2xl text-xs font-black uppercase transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'profile' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><User size={16} /> Profil Saya</button>
         <button onClick={() => setActiveTab('data')} className={`px-8 py-3 rounded-2xl text-xs font-black uppercase transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'data' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Cloud size={16} /> Cloud Sync</button>
@@ -245,18 +244,14 @@ const Profile: React.FC<ProfileProps> = ({
 
       {activeTab === 'data' && (
         <div className="space-y-10 animate-in fade-in zoom-in-95 duration-500">
-           {/* REALTIME CLOUD SYNC UI - MATCHING SCREENSHOT */}
            <div className="bg-[#0a0a0a] p-10 md:p-14 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full -mr-48 -mt-48 transition-all group-hover:bg-blue-600/20"></div>
-              
               <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 mb-12 relative z-10">
                  <div className="w-20 h-20 bg-[#f97316] text-white rounded-[2rem] flex items-center justify-center shadow-[0_0_30px_rgba(249,115,22,0.3)] shrink-0">
                     <Cloud size={36} fill="white" />
                  </div>
                  <div className="text-center md:text-left">
-                    <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase">
-                       REALTIME <span className="text-blue-500">CLOUD SYNC</span>
-                    </h2>
+                    <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase">REALTIME <span className="text-blue-500">CLOUD SYNC</span></h2>
                     <p className="text-[#f97316] text-sm md:text-base font-bold italic mt-1">Sinkronisasi data antar perangkat secara otomatis.</p>
                  </div>
               </div>
@@ -264,57 +259,36 @@ const Profile: React.FC<ProfileProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                  <div className="space-y-3">
                     <label className="text-[11px] font-black text-[#475569] uppercase tracking-widest ml-1">FIREBASE API KEY</label>
-                    <div className="relative">
-                       <input 
-                        type="password" 
-                        value={firebaseApiKey} 
-                        onChange={e => setFirebaseApiKey(e.target.value)}
-                        placeholder="•••••••••••••••••••••••••••••••••••••••" 
-                        className="w-full px-8 py-6 bg-[#0f0f0f] border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all placeholder:text-white/10" 
-                       />
-                    </div>
+                    <input type="password" value={firebaseApiKey} onChange={e => setFirebaseApiKey(e.target.value)} placeholder="••••••••••••••••••••" className="w-full px-8 py-6 bg-[#0f0f0f] border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all placeholder:text-white/10" />
                  </div>
                  <div className="space-y-3">
                     <label className="text-[11px] font-black text-[#475569] uppercase tracking-widest ml-1">FIREBASE PROJECT ID</label>
-                    <input 
-                      type="text" 
-                      value={firebaseProjectId} 
-                      onChange={e => setFirebaseProjectId(e.target.value)}
-                      placeholder="sitampan-93c2a" 
-                      className="w-full px-8 py-6 bg-[#0f0f0f] border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all placeholder:text-white/10" 
-                    />
+                    <input type="text" value={firebaseProjectId} onChange={e => setFirebaseProjectId(e.target.value)} placeholder="sitampan-93c2a" className="w-full px-8 py-6 bg-[#0f0f0f] border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all placeholder:text-white/10" />
+                 </div>
+              </div>
+
+              <div className="mt-8 p-6 bg-blue-900/10 border border-blue-500/20 rounded-3xl flex gap-4 text-left">
+                 <div className="p-3 bg-blue-500/20 rounded-2xl h-fit"><Info size={20} className="text-blue-400" /></div>
+                 <div>
+                    <h4 className="text-white font-black text-xs uppercase tracking-widest mb-1">Penting: Izin Firestore</h4>
+                    <p className="text-blue-300/60 text-[11px] leading-relaxed">Agar HP bisa ikut membaca data dari Laptop, pastikan Anda sudah mengatur <b>Firestore Rules</b> di Firebase Console menjadi: <code className="bg-black/40 px-2 py-1 rounded text-blue-400">allow read, write: if true;</code> (hanya untuk pengujian).</p>
                  </div>
               </div>
 
               <div className="mt-12 flex justify-center md:justify-end relative z-10">
-                 <button 
-                  onClick={handleActivateCloudSync}
-                  disabled={isSyncing}
-                  className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-12 py-5 rounded-[1.8rem] font-black text-sm uppercase tracking-widest shadow-[0_20px_40px_rgba(37,99,235,0.25)] active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50"
-                 >
-                    {isSyncing ? (
-                      <>
-                        <RefreshCw size={22} className="animate-spin" />
-                        MENGHUBUNGKAN...
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck size={22} />
-                        AKTIFKAN CLOUD SYNC
-                      </>
-                    )}
+                 <button onClick={handleActivateCloudSync} disabled={isSyncing} className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-12 py-5 rounded-[1.8rem] font-black text-sm uppercase tracking-widest shadow-[0_20px_40px_rgba(37,99,235,0.25)] active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50">
+                    {isSyncing ? <><RefreshCw size={22} className="animate-spin" /> MENGHUBUNGKAN...</> : <><ShieldCheck size={22} /> AKTIFKAN CLOUD SYNC</>}
                  </button>
               </div>
 
               {currentUser.firebaseApiKey && (
                 <div className="mt-8 pt-8 border-t border-white/5 flex items-center gap-3 text-emerald-500 animate-in fade-in slide-in-from-top-2">
                    <CheckCircle2 size={16} />
-                   <span className="text-[11px] font-black uppercase tracking-[0.2em]">Server Cloud Terhubung: Aktif</span>
+                   <span className="text-[11px] font-black uppercase tracking-[0.2em]">Sistem Cloud Aktif & Terpantau</span>
                 </div>
               )}
            </div>
 
-           {/* LEGACY MANUAL BACKUP */}
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl">
               <div className="flex items-center gap-4 mb-8">
                  <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner"><Share2 size={28} /></div>
@@ -323,19 +297,15 @@ const Profile: React.FC<ProfileProps> = ({
                     <p className="text-sm text-slate-400 font-medium">Cadangkan data secara manual dalam format file JSON.</p>
                  </div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6 group hover:bg-white hover:shadow-lg transition-all">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all"><Download size={24} /></div>
                     <h4 className="text-lg font-black text-slate-800">Export Database</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed font-medium">Download seluruh data LKS, PM, dan surat ke dalam satu file backup.</p>
                     <button onClick={handleExportData} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg">Download File JSON</button>
                  </div>
-                 
                  <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6 group hover:bg-white hover:shadow-lg transition-all">
                     <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-all"><Upload size={24} /></div>
                     <h4 className="text-lg font-black text-slate-800">Import Database</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed font-medium">Unggah file backup JSON untuk memulihkan data di perangkat baru.</p>
                     <label className="block w-full py-4 bg-emerald-600 text-white text-center rounded-2xl font-black text-[10px] uppercase tracking-widest cursor-pointer hover:bg-emerald-700 transition-all shadow-lg">
                        Unggah File Backup
                        <input type="file" accept=".json" className="hidden" onChange={handleImportData} />
@@ -382,7 +352,7 @@ const Profile: React.FC<ProfileProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative z-10">
                  <div className="space-y-6">
                     <form onSubmit={handleSaveSystemSettings} className="space-y-4">
-                       <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Aplikasi Utama</label><input type="text" value={tempAppName} onChange={e => setTempAppName(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black text-slate-800 uppercase" /></div>
+                       <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Aplikasi Utama</label><input type="text" value={tempAppName} onChange={e => setEditNama(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black text-slate-800 uppercase" /></div>
                        <button type="submit" className="px-8 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-indigo-200">Update Identitas</button>
                     </form>
                  </div>
