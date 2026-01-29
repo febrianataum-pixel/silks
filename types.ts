@@ -56,6 +56,7 @@ export interface LKS {
   lingkupKerja: string;
   npwp: string;
   statusAkreditasi: Accreditation;
+  tahunAkreditasi?: string;
   statusAktif: LKSStatus;
   jenisBantuan: string; 
   riwayatBantuan: BantuanLKS[];

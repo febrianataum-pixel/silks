@@ -123,7 +123,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
       'Ketua', 'Telp Ketua', 'Sekretaris', 'Telp Sekretaris', 'Bendahara', 'Telp Bendahara',
       'Nomor Akte', 'Tanggal Akte', 'Nama Kemenkumham', 'Nomor SK Kemenkumham', 'Nomor Tanda Daftar', 
       'Masa Berlaku TD', 'Nomor Ijin Op', 'Masa Berlaku IO', 'Posisi LKS', 'Lingkup Kerja', 'NPWP', 
-      'Status Akreditasi', 'Status Aktif', 'Layanan Utama', 'Latitude', 'Longitude'
+      'Status Akreditasi', 'Tahun Akreditasi', 'Status Aktif', 'Layanan Utama', 'Latitude', 'Longitude'
     ];
 
     const rows = data.map(item => [
@@ -131,7 +131,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
       item.pengurus.ketua.nama, item.pengurus.ketua.tel, item.pengurus.sekretaris.nama, item.pengurus.sekretaris.tel, item.pengurus.bendahara.nama, item.pengurus.bendahara.tel,
       item.akteNotaris.nomor, item.akteNotaris.tanggal, item.namaKemenkumham, item.nomorSKKemenkumham, item.nomorTandaDaftar,
       item.masaBerlakuTandaDaftar, item.nomorIjinOperasional, item.masaBerlakuIjinOperasional, item.posisiLKS, item.lingkupKerja, item.npwp,
-      item.statusAkreditasi, item.statusAktif, item.jenisBantuan, item.koordinat.lat, item.koordinat.lng
+      item.statusAkreditasi, item.tahunAkreditasi || '-', item.statusAktif, item.jenisBantuan, item.koordinat.lat, item.koordinat.lng
     ]);
 
     let csvContent = "data:text/csv;charset=utf-8," 
@@ -188,7 +188,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
               pengurus: { ketua: { nama: '', telp: '' }, sekretaris: { nama: '', telp: '' }, bendahara: { nama: '', telp: '' } },
               akteNotaris: { nomor: '', tanggal: '' }, namaKemenkumham: '', nomorSKKemenkumham: '',
               nomorTandaDaftar: '', masaBerlakuTandaDaftar: '', nomorIjinOperasional: '', masaBerlakuIjinOperasional: '',
-              posisiLKS: 'Pusat', lingkupKerja: 'Kabupaten', npwp: '', statusAkreditasi: 'Belum', statusAktif: 'Aktif',
+              posisiLKS: 'Pusat', lingkupKerja: 'Kabupaten', npwp: '', statusAkreditasi: 'Belum', tahunAkreditasi: '', statusAktif: 'Aktif',
               jenisBantuan: JENIS_BANTUAN_LIST[0], riwayatBantuan: [], jumlahPM: 0, 
               koordinat: { lat: -6.968, lng: 111.417 }, dokumen: {}, kegiatanSosial: ''
             });
@@ -236,13 +236,14 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
                     </p>
                   </td>
                   <td className="px-8 py-6 text-center">
-                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl font-black text-sm border-2 ${
+                    <div className={`inline-flex flex-col items-center justify-center min-w-[50px] min-h-[50px] p-2 rounded-xl font-black text-sm border-2 ${
                       item.statusAkreditasi === 'A' ? 'bg-blue-50 border-blue-200 text-blue-600' : 
                       item.statusAkreditasi === 'B' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' :
                       item.statusAkreditasi === 'C' ? 'bg-amber-50 border-amber-200 text-amber-600' :
                       'bg-slate-50 border-slate-200 text-slate-400'
                     }`}>
-                      {item.statusAkreditasi === 'Belum' ? '-' : item.statusAkreditasi}
+                      <span>{item.statusAkreditasi === 'Belum' ? '-' : item.statusAkreditasi}</span>
+                      {item.tahunAkreditasi && <span className="text-[8px] opacity-70 mt-0.5">{item.tahunAkreditasi}</span>}
                     </div>
                   </td>
                   <td className="px-8 py-6 text-center">
@@ -306,7 +307,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-12 space-y-20 pb-24">
+            <div className="flex-1 overflow-y-auto p-12 space-y-20 pb-24 no-scrollbar">
               {/* I. Identitas Dasar */}
               <div className="space-y-8">
                 <h4 className="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2 border-b-2 border-blue-100 pb-2">
@@ -408,7 +409,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
                 <h4 className="text-sm font-black text-rose-600 uppercase tracking-widest flex items-center gap-2 border-b-2 border-rose-100 pb-2">
                   <Award size={16} /> IV. Klasifikasi & Status Akreditasi
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   <div><label className="text-[10px] font-black text-slate-400 uppercase">Posisi LKS</label>
                     <select value={selectedLks.posisiLKS} onChange={e => handleChange('posisiLKS', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold">
                       <option value="Pusat">Pusat</option><option value="Cabang">Cabang</option>
@@ -423,6 +424,9 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
                     <select value={selectedLks.statusAkreditasi} onChange={e => handleChange('statusAkreditasi', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-black text-blue-600">
                       <option value="Belum">Belum Terakreditasi</option><option value="A">Grade A (Sangat Baik)</option><option value="B">Grade B (Baik)</option><option value="C">Grade C (Cukup)</option>
                     </select>
+                  </div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase">Tahun Akreditasi</label>
+                    <input type="text" placeholder="Contoh: 2023" value={selectedLks.tahunAkreditasi || ''} onChange={e => handleChange('tahunAkreditasi', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
                   </div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase">Status Aktif</label>
                     <select value={selectedLks.statusAktif} onChange={e => handleChange('statusAktif', e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-black text-emerald-600">
@@ -595,6 +599,9 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
                            <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Alamat</span> : {reportLks.alamat}</p>
                            <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Wilayah</span> : {reportLks.desa}, {reportLks.kecamatan}</p>
                            <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Status LKS</span> : {reportLks.statusAktif}</p>
+                           {reportLks.tahunAkreditasi && (
+                             <p className="arial-force"><span className="font-bold w-32 inline-block arial-force">Thn Akreditasi</span> : {reportLks.tahunAkreditasi}</p>
+                           )}
                          </div>
                       </div>
                       <div className="space-y-4 arial-force">
@@ -623,6 +630,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
         #printable-table-area table { border-collapse: separate; border-spacing: 0; }
         #printable-table-area tr:first-child th:first-child { border-top-left-radius: 2.5rem; }
         #printable-table-area tr:first-child th:last-child { border-top-right-radius: 2.5rem; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );

@@ -56,6 +56,7 @@ export const MOCK_LKS: LKS[] = [
     lingkupKerja: 'Kabupaten',
     npwp: '01.234.567.8-504.000',
     statusAkreditasi: 'A',
+    tahunAkreditasi: '2023',
     statusAktif: 'Aktif',
     jenisBantuan: 'Anak & Yatim Piatu',
     riwayatBantuan: [
