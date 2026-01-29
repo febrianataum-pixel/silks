@@ -280,7 +280,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data }) => {
                      <h3 className="text-2xl font-black text-slate-800 leading-tight">Berkas Tidak Ditemukan</h3>
                      <p className="text-sm text-slate-500 leading-relaxed font-medium mt-2">
                        File PDF untuk dokumen <b>{previewDoc.docLabel}</b> belum diunggah atau data tidak valid. 
-                       Gunakan menu <b>Data LKS > Edit</b> untuk mengunggah file PDF asli.
+                       Gunakan menu <b>Data LKS &gt; Edit</b> untuk mengunggah file PDF asli.
                      </p>
                    </div>
                    <button 
