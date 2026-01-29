@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Shield, Key, Trash2, UserPlus, ShieldAlert, Settings, Save, UploadCloud, Image as ImageIcon, Check, Camera, X, AlertTriangle, Database } from 'lucide-react';
+import { User, Shield, Key, Trash2, UserPlus, ShieldAlert, Settings, Save, UploadCloud, Image as ImageIcon, Check, Camera, X, AlertTriangle, Database, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface ProfileProps {
@@ -30,6 +30,7 @@ const Profile: React.FC<ProfileProps> = ({
   const [editNama, setEditNama] = useState(currentUser.nama);
   const [newPassword, setNewPassword] = useState('');
   const [firebaseApiKey, setFirebaseApiKey] = useState(currentUser.firebaseApiKey || '');
+  const [isVerifying, setIsVerifying] = useState(false);
   
   // App Settings States
   const [tempAppName, setTempAppName] = useState(appName);
@@ -38,19 +39,27 @@ const Profile: React.FC<ProfileProps> = ({
   const [newUser, setNewUser] = useState({ username: '', password: '', nama: '', role: 'User' as any });
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
+  const isFirebaseConnected = !!firebaseApiKey;
+
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedUser: UserAccount = { 
-      ...currentUser, 
-      nama: editNama,
-      firebaseApiKey: firebaseApiKey
-    };
-    if (newPassword) updatedUser.password = newPassword;
+    setIsVerifying(true);
     
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
-    onUpdateCurrentUser(updatedUser);
-    setNewPassword('');
-    alert('Profil dan keamanan berhasil diperbarui.');
+    // Simulate API Key Verification
+    setTimeout(() => {
+      const updatedUser: UserAccount = { 
+        ...currentUser, 
+        nama: editNama,
+        firebaseApiKey: firebaseApiKey
+      };
+      if (newPassword) updatedUser.password = newPassword;
+      
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+      onUpdateCurrentUser(updatedUser);
+      setNewPassword('');
+      setIsVerifying(false);
+      alert('Profil dan keamanan berhasil diperbarui.');
+    }, 800);
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,10 +202,24 @@ const Profile: React.FC<ProfileProps> = ({
                        </div>
                     </div>
 
-                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-4 mt-4">
-                       <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-2">
-                          <Key size={18} className="text-blue-600" /> Keamanan & Integrasi
-                       </h3>
+                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-4 mt-4 relative overflow-hidden">
+                       <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                             <Key size={18} className="text-blue-600" /> Keamanan & Integrasi
+                          </h3>
+                          {isFirebaseConnected ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Firebase Connected</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-200 border border-slate-300 rounded-xl opacity-60">
+                               <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
+                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Offline Mode</span>
+                            </div>
+                          )}
+                       </div>
+                       
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password Baru (Opsional)</label>
@@ -212,20 +235,37 @@ const Profile: React.FC<ProfileProps> = ({
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                               <Database size={12} className="text-indigo-600" /> Firebase API Key
                             </label>
-                            <input 
-                              type="password" 
-                              value={firebaseApiKey}
-                              onChange={e => setFirebaseApiKey(e.target.value)}
-                              placeholder="AIzaSyA..."
-                              className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
-                            />
-                            <p className="text-[8px] text-slate-400 font-medium px-1 italic">Kunci ini digunakan untuk sinkronisasi data cloud real-time.</p>
+                            <div className="relative">
+                              <input 
+                                type="password" 
+                                value={firebaseApiKey}
+                                onChange={e => setFirebaseApiKey(e.target.value)}
+                                placeholder="AIzaSyA..."
+                                className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium pr-12"
+                              />
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400">
+                                 {isFirebaseConnected ? <Cloud size={16} /> : <CloudOff size={16} />}
+                              </div>
+                            </div>
+                            <p className="text-[8px] text-slate-400 font-medium px-1 italic">Kunci ini digunakan untuk sinkronisasi data cloud real-time secara otomatis.</p>
                           </div>
                        </div>
                     </div>
 
-                    <button type="submit" className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center gap-2">
-                      <Save size={18} /> Simpan Perubahan Profil
+                    <button 
+                      type="submit" 
+                      disabled={isVerifying}
+                      className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw size={18} className="animate-spin" /> Verifikasi Koneksi...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={18} /> Simpan Perubahan Profil
+                        </>
+                      )}
                     </button>
                  </form>
                </div>

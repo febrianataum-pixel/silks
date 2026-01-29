@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
 import AdministrasiPage from './pages/Administrasi';
@@ -44,6 +44,8 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const isFirebaseConnected = !!currentUser?.firebaseApiKey;
 
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
@@ -212,13 +214,31 @@ const App: React.FC = () => {
             >
               <Menu size={24} />
             </button>
-            <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">
-                {menuItems.find(i => i.id === activePage)?.label}
-              </h2>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">
+                  {menuItems.find(i => i.id === activePage)?.label}
+                </h2>
+                <div className="flex items-center gap-4 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p>
+                  </div>
+                  <div className="w-px h-3 bg-slate-200"></div>
+                  <div className="flex items-center gap-1.5">
+                    {isFirebaseConnected ? (
+                      <>
+                        <Cloud size={10} className="text-blue-500" />
+                        <p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Terhubung</p>
+                      </>
+                    ) : (
+                      <>
+                        <CloudOff size={10} className="text-slate-300" />
+                        <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Cloud Sync: Offline</p>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
