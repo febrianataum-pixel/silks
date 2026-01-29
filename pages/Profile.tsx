@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Shield, Key, Trash2, UserPlus, ShieldAlert, Settings, Save, UploadCloud, Image as ImageIcon, Check, Camera, X, AlertTriangle } from 'lucide-react';
+import { User, Shield, Key, Trash2, UserPlus, ShieldAlert, Settings, Save, UploadCloud, Image as ImageIcon, Check, Camera, X, AlertTriangle, Database } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface ProfileProps {
@@ -29,6 +29,7 @@ const Profile: React.FC<ProfileProps> = ({
   // Profile Update States
   const [editNama, setEditNama] = useState(currentUser.nama);
   const [newPassword, setNewPassword] = useState('');
+  const [firebaseApiKey, setFirebaseApiKey] = useState(currentUser.firebaseApiKey || '');
   
   // App Settings States
   const [tempAppName, setTempAppName] = useState(appName);
@@ -39,7 +40,11 @@ const Profile: React.FC<ProfileProps> = ({
 
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedUser = { ...currentUser, nama: editNama };
+    const updatedUser: UserAccount = { 
+      ...currentUser, 
+      nama: editNama,
+      firebaseApiKey: firebaseApiKey
+    };
     if (newPassword) updatedUser.password = newPassword;
     
     setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
@@ -168,7 +173,6 @@ const Profile: React.FC<ProfileProps> = ({
                           </span>
                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Akses Sejak {new Date(currentUser.createdAt).toLocaleDateString('id-ID')}</span>
                        </div>
-                       <p className="text-xs text-slate-400 mt-4 max-w-xs leading-relaxed">Klik ikon kamera pada foto profil untuk mengubah ikon/foto akun Anda.</p>
                     </div>
                  </div>
 
@@ -191,17 +195,32 @@ const Profile: React.FC<ProfileProps> = ({
 
                     <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 space-y-4 mt-4">
                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-2">
-                          <Key size={18} className="text-blue-600" /> Keamanan & Password
+                          <Key size={18} className="text-blue-600" /> Keamanan & Integrasi
                        </h3>
-                       <div className="max-w-md space-y-2">
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password Baru (Opsional)</label>
-                         <input 
-                           type="password" 
-                           value={newPassword}
-                           onChange={e => setNewPassword(e.target.value)}
-                           placeholder="Biarkan kosong jika tidak ingin mengubah"
-                           className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-                         />
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password Baru (Opsional)</label>
+                            <input 
+                              type="password" 
+                              value={newPassword}
+                              onChange={e => setNewPassword(e.target.value)}
+                              placeholder="Biarkan kosong untuk tetap"
+                              className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                              <Database size={12} className="text-indigo-600" /> Firebase API Key
+                            </label>
+                            <input 
+                              type="password" 
+                              value={firebaseApiKey}
+                              onChange={e => setFirebaseApiKey(e.target.value)}
+                              placeholder="AIzaSyA..."
+                              className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                            />
+                            <p className="text-[8px] text-slate-400 font-medium px-1 italic">Kunci ini digunakan untuk sinkronisasi data cloud real-time.</p>
+                          </div>
                        </div>
                     </div>
 
@@ -309,7 +328,6 @@ const Profile: React.FC<ProfileProps> = ({
            </div>
         </div>
       ) : (
-        /* SYSTEM SETTINGS TAB (Admin Only) */
         <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden relative">
               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32"></div>
@@ -318,56 +336,33 @@ const Profile: React.FC<ProfileProps> = ({
               </h3>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative z-10">
-                 {/* App Name Section */}
                  <div className="space-y-6">
                     <form onSubmit={handleSaveSystemSettings} className="space-y-4">
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Aplikasi Utama</label>
-                          <input 
-                            type="text" 
-                            value={tempAppName}
-                            onChange={e => setTempAppName(e.target.value)}
-                            placeholder="Contoh: SI-LKS BLORA"
-                            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-black text-slate-800 uppercase"
-                          />
+                          <input type="text" value={tempAppName} onChange={e => setTempAppName(e.target.value)} placeholder="Contoh: SI-LKS BLORA" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-black text-slate-800 uppercase" />
                        </div>
                        <button type="submit" className="px-8 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 shadow-xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2">
                           <Check size={18} /> Update Nama Aplikasi
                        </button>
                     </form>
-
                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Informasi Pengaturan</p>
-                       <p className="text-xs text-slate-600 leading-relaxed italic">
-                          Perubahan pada Nama Aplikasi dan Logo akan berdampak pada seluruh antarmuka sistem termasuk Halaman Login, Sidebar, dan Header. Pastikan logo yang diunggah memiliki rasio 1:1 untuk hasil terbaik.
-                       </p>
+                       <p className="text-xs text-slate-600 leading-relaxed italic">Perubahan pada Nama Aplikasi dan Logo akan berdampak pada seluruh antarmuka sistem.</p>
                     </div>
                  </div>
-
-                 {/* App Logo Section */}
                  <div className="space-y-6">
                     <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 bg-slate-50 rounded-[3rem] text-center gap-4">
                        <div className="w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center overflow-hidden border border-slate-100">
-                          {appLogo ? (
-                             <img src={appLogo} alt="Preview" className="w-full h-full object-contain" />
-                          ) : (
-                             <ImageIcon size={40} className="text-slate-200" />
-                          )}
+                          {appLogo ? <img src={appLogo} alt="Preview" className="w-full h-full object-contain" /> : <ImageIcon size={40} className="text-slate-200" />}
                        </div>
-                       <div>
-                          <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Logo Aplikasi Saat Ini</p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Format: JPG, PNG, atau SVG (Max 1MB)</p>
-                       </div>
+                       <div><p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Logo Aplikasi Saat Ini</p></div>
                        <div className="flex gap-2">
                           <label className="cursor-pointer px-6 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center gap-2">
                              <UploadCloud size={16} /> Unggah Logo Baru
                              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                           </label>
-                          {appLogo && (
-                            <button onClick={() => setAppLogo(null)} className="px-4 py-2.5 bg-white border border-red-100 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all">
-                               Reset
-                            </button>
-                          )}
+                          {appLogo && <button onClick={() => setAppLogo(null)} className="px-4 py-2.5 bg-white border border-red-100 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all">Reset</button>}
                        </div>
                     </div>
                  </div>
@@ -376,31 +371,16 @@ const Profile: React.FC<ProfileProps> = ({
         </div>
       )}
 
-      {/* DELETE USER CONFIRMATION MODAL */}
       {deleteTargetId && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setDeleteTargetId(null)}></div>
+          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setDeleteTargetId(null)}></div>
           <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
-            <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner animate-pulse">
-              <AlertTriangle size={40} />
-            </div>
+            <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner animate-pulse"><AlertTriangle size={40} /></div>
             <h3 className="text-2xl font-black text-slate-800 leading-tight mb-3">Hapus Pengguna?</h3>
-            <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-              Akun milik <span className="font-bold text-slate-900 underline">"{targetUser?.nama}"</span> akan dihapus secara permanen. Pengguna ini tidak akan bisa login lagi ke sistem.
-            </p>
+            <p className="text-slate-500 text-sm mb-8 leading-relaxed">Akun milik <span className="font-bold text-slate-900 underline">"{targetUser?.nama}"</span> akan dihapus secara permanen.</p>
             <div className="flex w-full gap-4">
-              <button 
-                onClick={() => setDeleteTargetId(null)} 
-                className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={executeDeleteUser} 
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-500 active:scale-95 transition-all"
-              >
-                Hapus Permanen
-              </button>
+              <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">Batal</button>
+              <button onClick={executeDeleteUser} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-500 active:scale-95 transition-all">Hapus Permanen</button>
             </div>
           </div>
         </div>

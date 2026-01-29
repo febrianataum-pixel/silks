@@ -12,6 +12,7 @@ export interface UserAccount {
   role: Role;
   createdAt: string;
   avatar?: string;
+  firebaseApiKey?: string;
 }
 
 export interface BantuanLKS {

@@ -18,9 +18,10 @@ declare const html2pdf: any;
 interface LKSListProps {
   data: LKS[];
   setData: React.Dispatch<React.SetStateAction<LKS[]>>;
+  onNotify?: (action: string, target: string) => void;
 }
 
-const LKSList: React.FC<LKSListProps> = ({ data, setData }) => {
+const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLks, setSelectedLks] = useState<LKS | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -80,6 +81,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData }) => {
 
   const handleSave = () => {
     if (selectedLks) {
+      const isNew = !data.some(i => i.id === selectedLks.id);
       setData(prev => {
         const index = prev.findIndex(i => i.id === selectedLks.id);
         if (index > -1) {
@@ -89,6 +91,11 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData }) => {
         }
         return [selectedLks, ...prev];
       });
+      
+      if (onNotify) {
+        onNotify(isNew ? 'Menambah LKS' : 'Mengupdate LKS', selectedLks.nama);
+      }
+      
       setIsEditing(false);
       setSelectedLks(null);
       alert('Data LKS berhasil diperbarui.');
@@ -97,7 +104,11 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData }) => {
 
   const handleConfirmDelete = () => {
     if (deleteConfirmId) {
+      const targetName = data.find(i => i.id === deleteConfirmId)?.nama || 'Data LKS';
       setData(prev => prev.filter(item => item.id !== deleteConfirmId));
+      if (onNotify) {
+        onNotify('Menghapus LKS', targetName);
+      }
       setDeleteConfirmId(null);
     }
   };
@@ -107,7 +118,6 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData }) => {
   };
 
   const handleExportExcel = () => {
-    // Membangun header kolom untuk seluruh indikator
     const headers = [
       'Nama LKS', 'Alamat', 'Desa', 'Kecamatan', 'No Telp Ketua', 'Tempat Pendirian', 'Tanggal Pendirian',
       'Ketua', 'Telp Ketua', 'Sekretaris', 'Telp Sekretaris', 'Bendahara', 'Telp Bendahara',

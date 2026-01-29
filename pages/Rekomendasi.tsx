@@ -1,22 +1,25 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline } from 'lucide-react';
+import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline, Copy, Edit3, AlertTriangle } from 'lucide-react';
 import { LKS, LetterRecord } from '../types';
 
 declare const html2pdf: any;
 
 interface RekomendasiPageProps {
   lksData: LKS[];
+  onNotify?: (action: string, target: string) => void;
 }
 
-const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
+const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, onNotify }) => {
   const [letters, setLetters] = useState<LetterRecord[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingLetterId, setEditingLetterId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   const defaultLogo = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Coat_of_arms_of_Blora_Regency.svg/1200px-Coat_of_arms_of_Blora_Regency.svg.png";
 
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     nomorSurat: '400.9/         /2025',
     tanggalSurat: new Date().toISOString().split('T')[0],
     lksId: '',
@@ -29,7 +32,9 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
     pangkatPenandatangan: 'Pembina Utama Muda',
     nipPenandatangan: '19760817 199511 1 003',
     letterLogo: defaultLogo
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
   
   const editorRef = useRef<HTMLDivElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -51,10 +56,9 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
   };
 
   useEffect(() => {
-    if (formData.lksId && editorRef.current) {
+    if (formData.lksId && editorRef.current && !editingLetterId) {
       const selectedLks = lksData.find(l => l.id === formData.lksId);
       if (selectedLks) {
-        // Redaksi sesuai screenshot dengan variabel fleksibel
         editorRef.current.innerHTML = `
           <div style="margin-bottom: 12px;">
             <p>Yth.: ${formData.recipientName}</p>
@@ -73,18 +77,75 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
         `;
       }
     }
-  }, [formData.lksId, lksData]);
+  }, [formData.lksId, lksData, editingLetterId]);
 
   const handleSave = () => {
     if (!formData.lksId) return alert('Silakan pilih LKS dahulu');
-    const newLetter: LetterRecord = { 
-      id: Math.random().toString(36).substr(2, 9), 
-      ...formData, 
-      tanggal: new Date(formData.tanggalSurat).toISOString(), 
-      konten: editorRef.current?.innerHTML || '' 
-    } as any;
-    setLetters([newLetter, ...letters]);
+    
+    const letterToSave = {
+      ...formData,
+      id: editingLetterId || Math.random().toString(36).substr(2, 9),
+      tanggal: new Date(formData.tanggalSurat).toISOString(),
+      konten: editorRef.current?.innerHTML || ''
+    };
+
+    if (editingLetterId) {
+      setLetters(prev => prev.map(l => l.id === editingLetterId ? (letterToSave as any) : l));
+      if (onNotify) onNotify('Mengupdate Surat', formData.nomorSurat);
+      alert('Perubahan surat berhasil disimpan.');
+    } else {
+      setLetters(prev => [letterToSave as any, ...prev]);
+      if (onNotify) onNotify('Membuat Surat', formData.nomorSurat);
+      alert('Surat baru berhasil diarsipkan.');
+    }
+
     setIsCreating(false);
+    setEditingLetterId(null);
+    setFormData(initialFormData);
+  };
+
+  const handleEdit = (letter: LetterRecord) => {
+    setFormData({
+      nomorSurat: letter.nomorSurat,
+      tanggalSurat: new Date(letter.tanggal).toISOString().split('T')[0],
+      lksId: letter.lksId,
+      perihal: letter.perihal,
+      lampiran: (letter as any).lampiran || 'Proposal',
+      recipientName: (letter as any).recipientName || 'Kepala Dinas Sosial Provinsi Jawa Tengah',
+      recipientLocation: (letter as any).recipientLocation || 'Semarang',
+      penandatanganJabatan: (letter as any).penandatanganJabatan || 'Kepala Dinas Sosial Pemberdayaan Perempuan dan Perlindungan Anak Kabupaten Blora',
+      namaPenandatangan: (letter as any).namaPenandatangan || 'LULUK KUSUMA AGUNG ARIADI, AP',
+      pangkatPenandatangan: (letter as any).pangkatPenandatangan || 'Pembina Utama Muda',
+      nipPenandatangan: (letter as any).nipPenandatangan || '19760817 199511 1 003',
+      letterLogo: (letter as any).letterLogo || defaultLogo
+    });
+    setEditingLetterId(letter.id);
+    setIsCreating(true);
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = letter.konten;
+      }
+    }, 100);
+  };
+
+  const handleDuplicate = (letter: LetterRecord) => {
+    const duplicatedLetter = {
+      ...letter,
+      id: Math.random().toString(36).substr(2, 9),
+      nomorSurat: `${letter.nomorSurat} (Copy)`,
+    };
+    setLetters(prev => [duplicatedLetter, ...prev]);
+    if (onNotify) onNotify('Duplikasi Surat', letter.nomorSurat);
+    alert('Surat berhasil diduplikasi.');
+  };
+
+  const executeDelete = () => {
+    if (deleteConfirmId) {
+      const targetNo = letters.find(l => l.id === deleteConfirmId)?.nomorSurat || 'Surat Rekomendasi';
+      setLetters(prev => prev.filter(l => l.id !== deleteConfirmId));
+      if (onNotify) onNotify('Menghapus Surat', targetNo);
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -122,7 +183,14 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
               <h2 className="text-3xl font-black mb-3">Arsip Rekomendasi</h2>
               <p className="text-slate-400 max-w-xl text-lg font-medium">Manajemen pembuatan surat rekomendasi resmi Dinsos Blora.</p>
             </div>
-            <button onClick={() => setIsCreating(true)} className="relative z-10 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2">
+            <button 
+              onClick={() => {
+                setFormData(initialFormData);
+                setEditingLetterId(null);
+                setIsCreating(true);
+              }} 
+              className="relative z-10 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2"
+            >
               <Plus size={20} /> BUAT SURAT BARU
             </button>
             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full -mr-32 -mt-32"></div>
@@ -130,18 +198,22 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 no-print">
             {letters.map(l => (
-              <div key={l.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+              <div key={l.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
                 <div className="flex justify-between items-start mb-6">
                   <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all"><FileText size={24} /></div>
-                  <button onClick={() => setLetters(letters.filter(item => item.id !== l.id))} className="p-2 text-slate-200 hover:text-red-600 transition-all"><Trash2 size={20} /></button>
+                  <div className="flex gap-1">
+                    <button onClick={() => handleEdit(l)} className="p-2 text-slate-300 hover:text-blue-600 transition-all" title="Edit"><Edit3 size={18} /></button>
+                    <button onClick={() => handleDuplicate(l)} className="p-2 text-slate-300 hover:text-emerald-600 transition-all" title="Duplikat"><Copy size={18} /></button>
+                    <button onClick={() => setDeleteConfirmId(l.id)} className="p-2 text-slate-300 hover:text-red-600 transition-all" title="Hapus"><Trash2 size={18} /></button>
+                  </div>
                 </div>
                 <h3 className="font-black text-slate-800 mb-2 truncate">{l.nomorSurat}</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-4">
-                  <Calendar size={14} className="text-blue-500" /> {formatDate(l.tanggalSurat)}
+                  <Calendar size={14} className="text-blue-500" /> {formatDate(l.tanggal)}
                 </p>
                 <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate max-w-[150px]">LKS: {lksData.find(item => item.id === l.lksId)?.nama}</p>
-                   <button className="text-[9px] font-black text-blue-600 uppercase hover:underline">Lihat Detail</button>
+                   <button onClick={() => handleEdit(l)} className="text-[9px] font-black text-blue-600 uppercase hover:underline">Buka Surat</button>
                 </div>
               </div>
             ))}
@@ -156,7 +228,13 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
       ) : (
         <div className="space-y-6">
           <div className="flex items-center justify-between no-print">
-            <button onClick={() => setIsCreating(false)} className="flex items-center gap-3 px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black text-xs uppercase tracking-widest hover:text-blue-600 hover:bg-blue-50 transition-all">
+            <button 
+              onClick={() => {
+                setIsCreating(false);
+                setEditingLetterId(null);
+              }} 
+              className="flex items-center gap-3 px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-slate-500 font-black text-xs uppercase tracking-widest hover:text-blue-600 hover:bg-blue-50 transition-all"
+            >
               <ArrowLeft size={18} /> Kembali
             </button>
             <div className="flex gap-3">
@@ -169,15 +247,27 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                 {isGenerating ? 'MENYIAPKAN...' : 'UNDUH PDF A4'}
               </button>
               <button onClick={handleSave} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
-                SIMPAN ARSIP
+                {editingLetterId ? 'SIMPAN PERUBAHAN' : 'SIMPAN ARSIP'}
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* INPUT PANEL */}
             <div className="space-y-4 no-print h-fit sticky top-24">
                <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-6 max-h-[75vh] overflow-y-auto no-scrollbar">
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Logo Kop Surat</h4>
+                    <div className="flex flex-col items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <div className="w-20 h-24 bg-white rounded-lg shadow-sm border p-2 flex items-center justify-center overflow-hidden">
+                          <img src={formData.letterLogo} alt="Logo" className="max-h-full max-w-full object-contain" />
+                       </div>
+                       <div className="flex gap-2 w-full">
+                          <button onClick={() => logoInputRef.current?.click()} className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2"><Upload size={14} /> Ganti Logo</button>
+                          <button onClick={() => setFormData({ ...formData, letterLogo: defaultLogo })} className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 transition-all" title="Reset Logo"><RefreshCw size={14} /></button>
+                       </div>
+                       <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
+                    </div>
+                  </div>
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">Data Lembaga & Surat</h4>
                     <div className="space-y-2">
@@ -200,7 +290,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                       <input type="date" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.tanggalSurat} onChange={e=>setFormData({...formData, tanggalSurat: e.target.value})} />
                     </div>
                   </div>
-
                   <div className="space-y-4 pt-2">
                     <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest border-b pb-2">Penandatangan</h4>
                     <div className="space-y-2">
@@ -217,7 +306,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                     </div>
                   </div>
                </div>
-               
                <div className="bg-slate-900 p-4 rounded-3xl grid grid-cols-4 gap-2">
                   <button onClick={()=>handleCommand('bold')} className="text-white p-2 hover:bg-white/10 rounded-xl transition-all flex justify-center" title="Bold"><Bold size={18}/></button>
                   <button onClick={()=>handleCommand('italic')} className="text-white p-2 hover:bg-white/10 rounded-xl transition-all flex justify-center" title="Italic"><Italic size={18}/></button>
@@ -229,14 +317,10 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                </div>
             </div>
 
-            {/* A4 PORTRAIT SURFACE */}
             <div className="lg:col-span-3">
               <div id="print-letter-surface" className="bg-white min-h-[1100px] shadow-2xl p-[1cm_1.5cm] arial-force border border-slate-100 relative">
-                 {/* Standard Kop Resmi Blora */}
                  <div className="flex items-center gap-8 border-b-4 border-double border-black pb-2 mb-4 text-center justify-center arial-force">
-                    <div className="w-[1.8cm] flex items-center justify-center">
-                      <img src={formData.letterLogo} className="max-h-24 max-w-full" alt="Logo" />
-                    </div>
+                    <div className="w-[1.8cm] flex items-center justify-center"><img src={formData.letterLogo} className="max-h-24 max-w-full" alt="Logo" /></div>
                     <div className="flex-1 arial-force text-black">
                       <h1 className="text-lg font-bold uppercase leading-tight arial-force">PEMERINTAH KABUPATEN BLORA</h1>
                       <h2 className="text-xl font-black uppercase leading-tight arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN</h2>
@@ -245,9 +329,7 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                       <p className="text-[8.5pt] font-medium arial-force">Website : dinsos.blorakab.go.id / E-mail : dinsosp3a.bla.com</p>
                     </div>
                  </div>
-
                  <div className="text-[11.5pt] leading-tight text-black printable-content arial-force">
-                    {/* Header Info & Date Block */}
                     <div className="flex justify-between items-start arial-force mb-4 relative">
                       <div className="space-y-0.5 arial-force">
                         <div className="grid grid-cols-[80px_10px_1fr] gap-x-1 arial-force">
@@ -256,19 +338,9 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                           <span className="arial-force self-start">Hal</span><span className="arial-force self-start">:</span><span className="font-bold underline arial-force uppercase tracking-tight">{formData.perihal}</span>
                         </div>
                       </div>
-                      <div className="text-right arial-force whitespace-nowrap absolute right-0 top-0">
-                        <span className="arial-force">Blora, {formatDate(formData.tanggalSurat)}</span>
-                      </div>
+                      <div className="text-right arial-force whitespace-nowrap absolute right-0 top-0"><span className="arial-force">Blora, {formatDate(formData.tanggalSurat)}</span></div>
                     </div>
-
-                    {/* FULLY EDITABLE FLEXIBLE CONTENT AREA */}
-                    <div 
-                      ref={editorRef} 
-                      contentEditable 
-                      className="min-h-[600px] outline-none text-justify whitespace-pre-wrap leading-relaxed letter-body arial-force p-0" 
-                    />
-
-                    {/* Signature Block */}
+                    <div ref={editorRef} contentEditable className="min-h-[600px] outline-none text-justify whitespace-pre-wrap leading-relaxed letter-body arial-force p-0" />
                     <div className="flex justify-end pt-4 arial-force">
                       <div className="text-left w-[350px] space-y-0 arial-force">
                         <p className="font-normal leading-tight arial-force">{formData.penandatanganJabatan}</p>
@@ -278,8 +350,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
                         <p className="text-[11pt] font-normal leading-tight arial-force">NIP. {formData.nipPenandatangan}</p>
                       </div>
                     </div>
-
-                    {/* Tembusan Block */}
                     <div className="mt-8 text-[10pt] arial-force border-t pt-2 w-fit">
                       <p className="font-bold underline arial-force mb-1">Tembusan : <span className="font-normal no-underline">Kepada Yth.</span></p>
                       <ol className="list-decimal ml-4 arial-force">
@@ -294,16 +364,28 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData }) => {
         </div>
       )}
 
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmId(null)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95">
+             <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={36} /></div>
+             <h3 className="text-2xl font-black text-slate-800 mb-2">Hapus Arsip Surat?</h3>
+             <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Tindakan ini permanen. Data surat rekomendasi yang sudah diarsipkan akan hilang dari sistem.</p>
+             <div className="flex gap-4">
+                <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+                <button onClick={executeDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 active:scale-95 transition-all">HAPUS PERMANEN</button>
+             </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .arial-force { font-family: Arial, Helvetica, sans-serif !important; }
         .letter-body p { margin-bottom: 0.5rem; }
         .letter-body ol, .letter-body ul { margin-top: 0.5rem; margin-bottom: 0.5rem; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        /* Simulating the Paraf block at very bottom if needed */
-        @media print {
-          #print-letter-surface { border: none !important; box-shadow: none !important; }
-        }
+        @media print { #print-letter-surface { border: none !important; box-shadow: none !important; } }
       `}</style>
     </div>
   );

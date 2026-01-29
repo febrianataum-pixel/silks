@@ -15,9 +15,10 @@ interface PenerimaManfaatPageProps {
   lksData: LKS[];
   pmData: PMType[];
   setPmData: React.Dispatch<React.SetStateAction<PMType[]>>;
+  onNotify?: (action: string, target: string) => void;
 }
 
-const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmData, setPmData }) => {
+const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmData, setPmData, onNotify }) => {
   const [selectedLksId, setSelectedLksId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'Semua' | PMKategori>('Semua');
@@ -82,6 +83,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         ...(formData as PMType),
         alamat: `${formData.asalDesa}, ${formData.asalKecamatan}, ${formData.asalKabKota}`
       } : p));
+      if (onNotify) onNotify('Mengupdate PM', formData.nama || 'Data PM');
       alert('Data Penerima Manfaat berhasil diperbarui.');
     } else {
       // Create Mode
@@ -92,11 +94,19 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         jenisBantuan: lksData.find(l => l.id === formData.lksId)?.jenisBantuan || 'Umum'
       };
       setPmData(prev => [pmToAdd, ...prev]);
+      if (onNotify) onNotify('Menambah PM', pmToAdd.nama);
       alert('Data Penerima Manfaat berhasil ditambahkan.');
     }
 
     setIsAdding(false);
     resetForm();
+  };
+
+  const handleDeletePm = (pm: PMType) => {
+    if(confirm(`Hapus data ${pm.nama}?`)) {
+      setPmData(prev => prev.filter(p => p.id !== pm.id));
+      if (onNotify) onNotify('Menghapus PM', pm.nama);
+    }
   };
 
   const resetForm = () => {
@@ -239,7 +249,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                           <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                             <Edit3 size={18} />
                           </button>
-                          <button onClick={() => { if(confirm('Hapus PM ini?')) setPmData(prev => prev.filter(p => p.id !== pm.id)) }} className="p-2.5 text-slate-300 hover:text-red-600 transition-all">
+                          <button onClick={() => handleDeletePm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all">
                             <Trash2 size={18} />
                           </button>
                         </div>
@@ -275,7 +285,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
             </div>
 
             <form onSubmit={handleSavePm} className="flex-1 overflow-y-auto p-12 space-y-10 no-scrollbar">
-              {/* Seksi Lembaga - SEARCHABLE DROPDOWN */}
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2 border-b border-blue-100 pb-2">
                   <Landmark size={14} /> Pilih Lembaga Kesejahteraan Sosial (LKS)
@@ -319,7 +328,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </div>
               </div>
 
-              {/* Seksi Identitas */}
               <div className="space-y-6">
                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
                   <User size={14} /> Identitas Diri
@@ -340,7 +348,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </div>
               </div>
 
-              {/* Kelahiran */}
               <div className="space-y-6">
                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
                   <Calendar size={14} /> Data Kelahiran & Gender
@@ -368,7 +375,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </div>
               </div>
 
-              {/* Wilayah Asal */}
               <div className="space-y-6">
                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
                   <Globe size={14} /> Alamat Asal Wilayah
@@ -392,7 +398,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </div>
               </div>
 
-              {/* Penempatan */}
               <div className="space-y-6">
                 <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 border-b pb-2">
                   <Home size={14} /> Status Keberadaan PM
@@ -425,7 +430,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         </div>
       )}
 
-      {/* MODAL IMPORT CSV (Keep existing) */}
       {isImporting && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsImporting(false)}></div>
@@ -474,6 +478,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                                   });
                                }
                                setPmData(prev => [...prev, ...newEntries]);
+                               if (onNotify) onNotify('Import PM', `${newEntries.length} Data BNBA`);
                                setIsImporting(false);
                                alert('Data berhasil diimpor.');
                             };
@@ -487,7 +492,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         </div>
       )}
 
-      {/* PRINT AREA BNBA LENGKAP - SELURUH INDIKATOR */}
+      {/* PRINT AREA BNBA LENGKAP */}
       <div id="print-bnba-list" className="hidden p-12 bg-white text-black arial-force">
         <div className="text-center mb-8 border-b-4 border-double border-black pb-4 arial-force">
           <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
