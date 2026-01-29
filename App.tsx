@@ -33,14 +33,13 @@ const App: React.FC = () => {
   const [navContext, setNavContext] = useState<{ id: string; type: 'LKS' | 'PM' } | null>(null);
 
   const [appName, setAppName] = useState(() => localStorage.getItem('si-lks-appname') || 'SI-LKS BLORA');
-  const [appLogo, setAppLogo] = useState<string | null>(() => localStorage.getItem('si-lks-applogo'));
+  const [appLogo, setAppLogo] = useState<string | null>(() => localStorage.getItem('si-lks-applogo') || null);
   const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('si-lks-islogged') === 'true');
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('si-lks-currentuser');
     return saved ? JSON.parse(saved) : null;
   });
   
-  // Konfigurasi Cloud Global (API KEY disimpan di level aplikasi agar perangkat baru bisa lsg konek)
   const [cloudConfig, setCloudConfig] = useState<{apiKey: string, projectId: string} | null>(() => {
     const saved = localStorage.getItem('si-lks-cloud-config');
     return saved ? JSON.parse(saved) : null;
@@ -66,12 +65,12 @@ const App: React.FC = () => {
 
   // Cloud Sync State
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
-  const isIncomingUpdate = useRef(false);
+  const lastSyncTime = useRef<number>(0);
 
   // Persistence to LocalStorage
   useEffect(() => {
     localStorage.setItem('si-lks-appname', appName);
-    if (appLogo) localStorage.setItem('si-lks-applogo', appLogo);
+    localStorage.setItem('si-lks-applogo', appLogo || '');
     localStorage.setItem('si-lks-allusers', JSON.stringify(allUsers));
     localStorage.setItem('si-lks-lksdata', JSON.stringify(lksData));
     localStorage.setItem('si-lks-pmdata', JSON.stringify(pmData));
@@ -81,7 +80,7 @@ const App: React.FC = () => {
     if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
   }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig]);
 
-  // --- FIREBASE REALTIME CLOUD SYNC LOGIC ---
+  // --- FIREBASE REALTIME CLOUD PULL ---
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
 
@@ -99,36 +98,39 @@ const App: React.FC = () => {
       const unsubscribe = onSnapshot(dataDocRef, (docSnap) => {
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
-          isIncomingUpdate.current = true;
           
+          // Hindari update jika kita baru saja mengunggah data ini (mencegah loop)
+          const now = Date.now();
+          if (now - lastSyncTime.current < 3000) return;
+
           if (remoteData.lks) setLksData(remoteData.lks);
           if (remoteData.pm) setPmData(remoteData.pm);
           if (remoteData.letters) setLettersData(remoteData.letters);
           if (remoteData.appName) setAppName(remoteData.appName);
           if (remoteData.allUsers) setAllUsers(remoteData.allUsers);
-          if (remoteData.appLogo) setAppLogo(remoteData.appLogo);
+          if (remoteData.appLogo !== undefined) setAppLogo(remoteData.appLogo);
+          
+          if (currentUser && remoteData.allUsers) {
+            const updatedSelf = remoteData.allUsers.find((u: any) => u.id === currentUser.id);
+            if (updatedSelf && JSON.stringify(updatedSelf) !== JSON.stringify(currentUser)) {
+              setCurrentUser(updatedSelf);
+            }
+          }
           
           setSyncStatus('idle');
         }
-      }, (error) => {
-        console.error("Firebase Sync Error:", error);
-        setSyncStatus('error');
       });
 
       return () => unsubscribe();
     } catch (err) {
-      console.error("Firebase Init Error:", err);
+      console.error("Cloud Error:", err);
       setSyncStatus('error');
     }
-  }, [cloudConfig]);
+  }, [cloudConfig?.apiKey]);
 
-  // Push local changes to Cloud
+  // --- FIREBASE CLOUD PUSH ---
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
-    if (isIncomingUpdate.current) {
-      isIncomingUpdate.current = false;
-      return;
-    }
 
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
@@ -144,24 +146,21 @@ const App: React.FC = () => {
           allUsers: allUsers,
           appName: appName,
           appLogo: appLogo,
-          lastUpdated: new Date().toISOString(),
-          updatedBy: currentUser?.nama || 'System'
+          lastUpdated: new Date().toISOString()
         }, { merge: true });
 
+        lastSyncTime.current = Date.now();
         setSyncStatus('idle');
       } catch (err) {
-        console.error("Cloud Push Error:", err);
         setSyncStatus('error');
       }
-    }, 2000);
+    }, 4000); // Jeda lebih lama untuk memastikan state stabil
 
     return () => clearTimeout(timer);
   }, [lksData, pmData, lettersData, appName, allUsers, appLogo]);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-
+  
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
     const newNotif: Notification = {
@@ -216,7 +215,7 @@ const App: React.FC = () => {
           </button>
           <div className={`p-6 flex items-center gap-3 transition-all duration-300 ${isSidebarCollapsed ? 'px-4' : 'px-6'}`}>
             <div className="shrink-0">
-              {appLogo ? <img src={appLogo} alt="Logo" className="w-10 h-10 object-contain rounded-lg" /> : <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-900/40">{appName.charAt(0)}</div>}
+              {appLogo ? <img src={appLogo} alt="Logo" className="w-10 h-10 object-contain rounded-lg bg-white p-1" /> : <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-900/40">{appName.charAt(0)}</div>}
             </div>
             {!isSidebarCollapsed && (
               <div className="animate-in fade-in duration-300">
@@ -273,7 +272,7 @@ const App: React.FC = () => {
                     ) : syncStatus === 'error' ? (
                       <><CloudOff size={10} className="text-red-500" /><p className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Gagal Sinkron</p></>
                     ) : (
-                      <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Aktif: Realtime</p></>
+                      <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Aktif</p></>
                     )
                   ) : (
                     <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Mode Lokal</p></>
@@ -283,8 +282,15 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-5">
-             {/* Notif & User profile... */}
-             <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group"><div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">{currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}</div><div className="hidden md:block text-left"><p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p><p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p></div></button>
+             <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group">
+                <div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">
+                   {currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}
+                </div>
+                <div className="hidden md:block text-left">
+                   <p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p>
+                   <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p>
+                </div>
+             </button>
           </div>
         </header>
 
