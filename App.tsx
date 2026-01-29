@@ -39,6 +39,13 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('si-lks-currentuser');
     return saved ? JSON.parse(saved) : null;
   });
+  
+  // Konfigurasi Cloud Global (API KEY disimpan di level aplikasi agar perangkat baru bisa lsg konek)
+  const [cloudConfig, setCloudConfig] = useState<{apiKey: string, projectId: string} | null>(() => {
+    const saved = localStorage.getItem('si-lks-cloud-config');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [allUsers, setAllUsers] = useState<UserAccount[]>(() => {
     const saved = localStorage.getItem('si-lks-allusers');
     return saved ? JSON.parse(saved) : MOCK_USERS;
@@ -61,7 +68,7 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const isIncomingUpdate = useRef(false);
 
-  // Persistence to LocalStorage (untuk mode offline)
+  // Persistence to LocalStorage
   useEffect(() => {
     localStorage.setItem('si-lks-appname', appName);
     if (appLogo) localStorage.setItem('si-lks-applogo', appLogo);
@@ -71,15 +78,16 @@ const App: React.FC = () => {
     localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
     localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
     if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
-  }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser]);
+    if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
+  }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig]);
 
   // --- FIREBASE REALTIME CLOUD SYNC LOGIC ---
   useEffect(() => {
-    if (!currentUser?.firebaseApiKey || !currentUser?.firebaseProjectId) return;
+    if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
 
     const firebaseConfig = {
-      apiKey: currentUser.firebaseApiKey,
-      projectId: currentUser.firebaseProjectId,
+      apiKey: cloudConfig.apiKey,
+      projectId: cloudConfig.projectId,
       appId: "si-lks-blora-sync"
     };
 
@@ -88,21 +96,19 @@ const App: React.FC = () => {
       const db = getFirestore(app);
       const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
 
-      // 1. Mendengarkan perubahan dari Cloud (Realtime Listener)
       const unsubscribe = onSnapshot(dataDocRef, (docSnap) => {
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
-          
-          // Tandai bahwa update ini berasal dari cloud agar tidak di-push balik
           isIncomingUpdate.current = true;
           
           if (remoteData.lks) setLksData(remoteData.lks);
           if (remoteData.pm) setPmData(remoteData.pm);
           if (remoteData.letters) setLettersData(remoteData.letters);
           if (remoteData.appName) setAppName(remoteData.appName);
+          if (remoteData.allUsers) setAllUsers(remoteData.allUsers);
+          if (remoteData.appLogo) setAppLogo(remoteData.appLogo);
           
           setSyncStatus('idle');
-          console.log("Data Cloud disinkronkan ke lokal.");
         }
       }, (error) => {
         console.error("Firebase Sync Error:", error);
@@ -114,27 +120,20 @@ const App: React.FC = () => {
       console.error("Firebase Init Error:", err);
       setSyncStatus('error');
     }
-  }, [currentUser?.firebaseApiKey, currentUser?.firebaseProjectId]);
+  }, [cloudConfig]);
 
-  // 2. Mendorong perubahan lokal ke Cloud (Publisher)
+  // Push local changes to Cloud
   useEffect(() => {
-    if (!currentUser?.firebaseApiKey || !currentUser?.firebaseProjectId) return;
-    
-    // Jika data baru saja datang dari cloud, jangan kirim balik (loop prevention)
+    if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
     if (isIncomingUpdate.current) {
       isIncomingUpdate.current = false;
       return;
     }
 
-    // Debounce: Tunggu 2 detik setelah perubahan terakhir selesai baru kirim ke cloud
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
       try {
-        const firebaseConfig = {
-          apiKey: currentUser.firebaseApiKey,
-          projectId: currentUser.firebaseProjectId,
-        };
-        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        const app = getApp();
         const db = getFirestore(app);
         const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
 
@@ -142,13 +141,14 @@ const App: React.FC = () => {
           lks: lksData,
           pm: pmData,
           letters: lettersData,
+          allUsers: allUsers,
           appName: appName,
+          appLogo: appLogo,
           lastUpdated: new Date().toISOString(),
-          updatedBy: currentUser.nama
+          updatedBy: currentUser?.nama || 'System'
         }, { merge: true });
 
         setSyncStatus('idle');
-        console.log("Data lokal berhasil didorong ke Cloud.");
       } catch (err) {
         console.error("Cloud Push Error:", err);
         setSyncStatus('error');
@@ -156,7 +156,7 @@ const App: React.FC = () => {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [lksData, pmData, lettersData, appName]);
+  }, [lksData, pmData, lettersData, appName, allUsers, appLogo]);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -174,20 +174,6 @@ const App: React.FC = () => {
     };
     setNotifications(prev => [newNotif, ...prev].slice(0, 20));
   };
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-        setIsSidebarCollapsed(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    handleResize();
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const handleLogin = (user: UserAccount) => {
     setCurrentUser(user);
@@ -208,17 +194,18 @@ const App: React.FC = () => {
   };
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} allUsers={allUsers} setAllUsers={setAllUsers} appName={appName} appLogo={appLogo} />;
+    return (
+      <LoginPage 
+        onLogin={handleLogin} 
+        allUsers={allUsers} 
+        setAllUsers={setAllUsers} 
+        appName={appName} 
+        appLogo={appLogo}
+        cloudConfig={cloudConfig}
+        setCloudConfig={setCloudConfig}
+      />
+    );
   }
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { id: 'lks', label: 'Data LKS', icon: <Building2 size={20} /> },
-    { id: 'administrasi', label: 'Administrasi', icon: <ClipboardList size={20} /> },
-    { id: 'pm', label: 'Penerima Manfaat', icon: <Users size={20} /> },
-    { id: 'rekomendasi', label: 'Rekomendasi', icon: <FileText size={20} /> },
-    { id: 'profile', label: 'Profil Saya', icon: <UserCircle size={20} /> },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter">
@@ -239,7 +226,14 @@ const App: React.FC = () => {
             )}
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto no-scrollbar">
-            {menuItems.map((item) => (
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+              { id: 'lks', label: 'Data LKS', icon: <Building2 size={20} /> },
+              { id: 'administrasi', label: 'Administrasi', icon: <ClipboardList size={20} /> },
+              { id: 'pm', label: 'Penerima Manfaat', icon: <Users size={20} /> },
+              { id: 'rekomendasi', label: 'Rekomendasi', icon: <FileText size={20} /> },
+              { id: 'profile', label: 'Profil Saya', icon: <UserCircle size={20} /> },
+            ].map((item) => (
               <button key={item.id} onClick={() => { setActivePage(item.id as Page); setNavContext(null); }} className={`w-full flex items-center transition-all group rounded-2xl relative ${isSidebarCollapsed ? 'justify-center py-4 px-0' : 'px-4 py-3.5 gap-3'} ${activePage === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
                 <div className={`${activePage === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform duration-300`}>{item.icon}</div>
                 {!isSidebarCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
@@ -268,12 +262,12 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-600 transition-colors"><Menu size={24} /></button>
             <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{menuItems.find(i => i.id === activePage)?.label}</h2>
+              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activePage.toUpperCase()}</h2>
               <div className="flex items-center gap-4 mt-1">
                 <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p></div>
                 <div className="w-px h-3 bg-slate-200"></div>
                 <div className="flex items-center gap-1.5">
-                  {currentUser?.firebaseApiKey ? (
+                  {cloudConfig?.apiKey ? (
                     syncStatus === 'syncing' ? (
                       <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Sinkronisasi Cloud...</p></>
                     ) : syncStatus === 'error' ? (
@@ -289,19 +283,8 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-5">
-            <div className="relative" ref={notifRef}>
-              <button onClick={() => setShowNotifDropdown(!showNotifDropdown)} className={`relative p-3 rounded-2xl transition-all ${showNotifDropdown ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}><Bell size={22} />{notifications.filter(n => !n.isRead).length > 0 && <span className="absolute top-2.5 right-2.5 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">{notifications.filter(n => !n.isRead).length}</span>}</button>
-              {showNotifDropdown && (
-                <div className="absolute right-0 mt-4 w-96 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden z-[100] animate-in slide-in-from-top-4 duration-300">
-                  <div className="p-6 bg-slate-900 text-white"><h4 className="font-black text-sm uppercase tracking-tight">Log Aktivitas</h4><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Data Real-time</p></div>
-                  <div className="max-h-[400px] overflow-y-auto no-scrollbar">
-                    {notifications.length > 0 ? notifications.map(n => (<div key={n.id} className="p-5 border-b last:border-0 hover:bg-slate-50 transition-colors flex gap-4"><div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0"><CheckCircle2 size={18} /></div><div className="flex-1 min-w-0"><p className="text-xs font-bold text-slate-800"><span className="text-blue-600 font-black">{n.user}</span> {n.action.toLowerCase()} <span className="font-black">{n.target}</span></p></div></div>)) : (<div className="py-20 text-center flex flex-col items-center"><Bell size={48} className="text-slate-100 mb-4" /><p className="text-xs font-black text-slate-300 uppercase tracking-widest">Belum ada aktivitas</p></div>)}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="h-10 w-px bg-slate-200"></div>
-            <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group"><div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">{currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}</div><div className="hidden md:block text-left"><p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p><p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p></div></button>
+             {/* Notif & User profile... */}
+             <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group"><div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">{currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}</div><div className="hidden md:block text-left"><p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p><p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p></div></button>
           </div>
         </header>
 
@@ -313,12 +296,22 @@ const App: React.FC = () => {
             {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} initialSelectedPmId={navContext?.type === 'PM' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'profile' && currentUser && (
-              <ProfilePage currentUser={currentUser} allUsers={allUsers} setAllUsers={setAllUsers} onUpdateCurrentUser={setCurrentUser} appName={appName} setAppName={setAppName} appLogo={appLogo} setAppLogo={setAppLogo} />
+              <ProfilePage 
+                currentUser={currentUser} 
+                allUsers={allUsers} 
+                setAllUsers={setAllUsers} 
+                onUpdateCurrentUser={setCurrentUser} 
+                appName={appName} 
+                setAppName={setAppName} 
+                appLogo={appLogo} 
+                setAppLogo={setAppLogo}
+                cloudConfig={cloudConfig}
+                setCloudConfig={setCloudConfig}
+              />
             )}
           </div>
         </div>
       </main>
-
       {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/60 lg:hidden z-40 backdrop-blur-md no-print animate-in fade-in duration-300" onClick={() => setIsSidebarOpen(false)}></div>}
     </div>
   );
