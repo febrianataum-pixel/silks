@@ -2,16 +2,17 @@
 import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { 
-  Building2, Users, X, MapPin, ArrowRight, UserCheck, Home, Globe, AlertCircle, Clock, Calendar
+  Building2, Users, X, MapPin, ArrowRight, UserCheck, Home, Globe, AlertCircle, Clock, Calendar, ExternalLink
 } from 'lucide-react';
 import { LKS, PenerimaManfaat } from '../types';
 
 interface DashboardProps {
   lks: LKS[];
   pm: PenerimaManfaat[];
+  onNavigateToItem?: (id: string, type: 'LKS' | 'PM') => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ lks, pm }) => {
+const Dashboard: React.FC<DashboardProps> = ({ lks, pm, onNavigateToItem }) => {
   const [selectedDetail, setSelectedDetail] = useState<{ title: string; items: LKS[] | PenerimaManfaat[]; type: 'LKS' | 'PM' } | null>(null);
 
   // Statistics Calculation
@@ -248,7 +249,16 @@ const Dashboard: React.FC<DashboardProps> = ({ lks, pm }) => {
             <div className="flex-1 overflow-y-auto p-10">
               <div className="grid grid-cols-1 gap-4">
                 {selectedDetail.items.map((item: any) => (
-                  <div key={item.id} className="flex items-center justify-between p-6 border border-slate-50 rounded-3xl hover:bg-slate-50 hover:border-blue-100 transition-all group">
+                  <button 
+                    key={item.id} 
+                    onClick={() => {
+                      if(onNavigateToItem) {
+                        onNavigateToItem(item.id, selectedDetail.type);
+                        setSelectedDetail(null);
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-6 border border-slate-50 rounded-3xl hover:bg-slate-50 hover:border-blue-100 transition-all group text-left"
+                  >
                     <div>
                       <h4 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{item.nama}</h4>
                       <div className="flex items-center gap-3 mt-1">
@@ -263,8 +273,11 @@ const Dashboard: React.FC<DashboardProps> = ({ lks, pm }) => {
                         )}
                       </div>
                     </div>
-                    <ArrowRight size={18} className="text-slate-200 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-                  </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all text-blue-600">
+                      <span className="text-[10px] font-black uppercase tracking-widest">Buka Detail</span>
+                      <ExternalLink size={18} className="group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>

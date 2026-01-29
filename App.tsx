@@ -27,6 +27,9 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
+  // Navigation Context for Shortcuts
+  const [navContext, setNavContext] = useState<{ id: string; type: 'LKS' | 'PM' } | null>(null);
+
   // 1. App Identity State
   const [appName, setAppName] = useState(() => localStorage.getItem('si-lks-appname') || 'SI-LKS BLORA');
   const [appLogo, setAppLogo] = useState<string | null>(() => localStorage.getItem('si-lks-applogo'));
@@ -56,7 +59,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Database Persistence Effect (Auto-save on any change)
+  // Database Persistence Effect
   useEffect(() => {
     localStorage.setItem('si-lks-appname', appName);
     if (appLogo) localStorage.setItem('si-lks-applogo', appLogo);
@@ -126,6 +129,11 @@ const App: React.FC = () => {
     setCurrentUser(null);
   };
 
+  const handleNavigateToDetail = (id: string, type: 'LKS' | 'PM') => {
+    setNavContext({ id, type });
+    setActivePage(type === 'LKS' ? 'lks' : 'pm');
+  };
+
   if (!isLoggedIn) {
     return <LoginPage onLogin={handleLogin} allUsers={allUsers} setAllUsers={setAllUsers} appName={appName} appLogo={appLogo} />;
   }
@@ -160,7 +168,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto no-scrollbar">
             {menuItems.map((item) => (
-              <button key={item.id} onClick={() => setActivePage(item.id as Page)} className={`w-full flex items-center transition-all group rounded-2xl relative ${isSidebarCollapsed ? 'justify-center py-4 px-0' : 'px-4 py-3.5 gap-3'} ${activePage === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
+              <button key={item.id} onClick={() => { setActivePage(item.id as Page); setNavContext(null); }} className={`w-full flex items-center transition-all group rounded-2xl relative ${isSidebarCollapsed ? 'justify-center py-4 px-0' : 'px-4 py-3.5 gap-3'} ${activePage === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
                 <div className={`${activePage === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform duration-300`}>{item.icon}</div>
                 {!isSidebarCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
               </button>
@@ -193,7 +201,7 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p></div>
                 <div className="w-px h-3 bg-slate-200"></div>
                 <div className="flex items-center gap-1.5">
-                  {isFirebaseConnected ? <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Terhubung</p></> : <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Cloud Sync: Offline</p></>}
+                  {isFirebaseConnected ? <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Terhubung</p></> : <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Sync: Offline</p></>}
                 </div>
               </div>
             </div>
@@ -211,16 +219,16 @@ const App: React.FC = () => {
               )}
             </div>
             <div className="h-10 w-px bg-slate-200"></div>
-            <button onClick={() => setActivePage('profile')} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group"><div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">{currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}</div><div className="hidden md:block text-left"><p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p><p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p></div></button>
+            <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group"><div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">{currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}</div><div className="hidden md:block text-left"><p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p><p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p></div></button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 no-scrollbar">
           <div className="max-w-7xl mx-auto pb-20">
-            {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} />}
-            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} onNotify={(action, target) => addNotification(action, target)} />}
+            {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} onNavigateToItem={handleNavigateToDetail} />}
+            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'administrasi' && <AdministrasiPage data={lksData} />}
-            {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} onNotify={(action, target) => addNotification(action, target)} />}
+            {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} initialSelectedPmId={navContext?.type === 'PM' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'profile' && currentUser && (
               <ProfilePage currentUser={currentUser} allUsers={allUsers} setAllUsers={setAllUsers} onUpdateCurrentUser={setCurrentUser} appName={appName} setAppName={setAppName} appLogo={appLogo} setAppLogo={setAppLogo} />

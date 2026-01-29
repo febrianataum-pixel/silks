@@ -15,10 +15,11 @@ interface PenerimaManfaatPageProps {
   lksData: LKS[];
   pmData: PMType[];
   setPmData: React.Dispatch<React.SetStateAction<PMType[]>>;
+  initialSelectedPmId?: string;
   onNotify?: (action: string, target: string) => void;
 }
 
-const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmData, setPmData, onNotify }) => {
+const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmData, setPmData, initialSelectedPmId, onNotify }) => {
   const [selectedLksId, setSelectedLksId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'Semua' | PMKategori>('Semua');
@@ -46,6 +47,17 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     kategori: 'Dalam',
     keterangan: ''
   });
+
+  // Shortcut Handler: Auto-filter PM from Dashboard
+  useEffect(() => {
+    if (initialSelectedPmId) {
+      const target = pmData.find(p => p.id === initialSelectedPmId);
+      if (target) {
+        setSelectedLksId(target.lksId);
+        setSearchTerm(target.nama);
+      }
+    }
+  }, [initialSelectedPmId, pmData]);
 
   const selectedLks = lksData.find(l => l.id === selectedLksId);
 
@@ -178,7 +190,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSelectedLksId(null)} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
+              <button onClick={() => { setSelectedLksId(null); setSearchTerm(''); }} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
                 <ArrowLeft size={20} />
               </button>
               <div>
@@ -228,7 +240,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredPm.map((pm) => (
-                    <tr key={pm.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={pm.id} className={`hover:bg-slate-50 transition-colors ${initialSelectedPmId === pm.id ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-500' : ''}`}>
                       <td className="px-8 py-6">
                         <p className="font-black text-slate-800 text-sm uppercase">{pm.nama}</p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1.5 mt-1">

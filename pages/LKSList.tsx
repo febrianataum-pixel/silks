@@ -18,10 +18,11 @@ declare const html2pdf: any;
 interface LKSListProps {
   data: LKS[];
   setData: React.Dispatch<React.SetStateAction<LKS[]>>;
+  initialSelectedId?: string;
   onNotify?: (action: string, target: string) => void;
 }
 
-const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
+const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onNotify }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLks, setSelectedLks] = useState<LKS | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -31,6 +32,17 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
   
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+
+  // Shortcut Handler: Auto-open LKS from Dashboard
+  useEffect(() => {
+    if (initialSelectedId) {
+      const target = data.find(l => l.id === initialSelectedId);
+      if (target) {
+        setSelectedLks(target);
+        setIsEditing(true);
+      }
+    }
+  }, [initialSelectedId, data]);
 
   // Initialize Map at bottom of form
   useEffect(() => {
@@ -217,7 +229,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, onNotify }) => {
               {filteredData.map((item, idx) => (
                 <tr 
                   key={item.id} 
-                  className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                  className={`hover:bg-blue-50/40 transition-colors cursor-pointer group ${initialSelectedId === item.id ? 'bg-blue-50 ring-2 ring-inset ring-blue-500' : ''}`}
                   onClick={() => { setSelectedLks(item); setIsEditing(true); }}
                 >
                   <td className="px-8 py-6 text-sm font-black text-slate-300 border-r border-slate-50">{idx + 1}</td>
