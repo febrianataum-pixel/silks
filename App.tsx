@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
 import AdministrasiPage from './pages/Administrasi';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [navContext, setNavContext] = useState<{ id: string; type: 'LKS' | 'PM' } | null>(null);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   const [appName, setAppName] = useState(() => localStorage.getItem('si-lks-appname') || 'SI-LKS BLORA');
   const [appLogo, setAppLogo] = useState<string | null>(() => localStorage.getItem('si-lks-applogo') || null);
@@ -97,10 +98,7 @@ const App: React.FC = () => {
       const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
 
       const unsubscribe = onSnapshot(dataDocRef, (docSnap) => {
-        // Jangan timpa data lokal jika kita sedang mengunci sinkronisasi (sedang mengetik/mengupload)
         if (isSyncLocked.current) return;
-        
-        // Jangan timpa data lokal jika kita baru saja melakukan push dalam 10 detik terakhir
         const now = Date.now();
         if (now - lastWriteTime.current < 10000) return;
 
@@ -123,7 +121,6 @@ const App: React.FC = () => {
           setSyncStatus('idle');
         }
       }, (err) => {
-        console.error("Firebase Pull Error:", err);
         setSyncStatus('error');
       });
 
@@ -136,17 +133,13 @@ const App: React.FC = () => {
   // --- CLOUD PUSH LOGIC (Save changes to cloud) ---
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
-
-    // Set lastWriteTime segera setelah state berubah untuk memblokir PULL
     lastWriteTime.current = Date.now();
-
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
       try {
         const app = getApp();
         const db = getFirestore(app);
         const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
-
         await setDoc(dataDocRef, {
           lks: lksData,
           pm: pmData,
@@ -156,25 +149,24 @@ const App: React.FC = () => {
           appLogo: appLogo,
           lastUpdated: new Date().toISOString()
         }, { merge: true });
-
-        // Update waktu sukses penulisan
         lastWriteTime.current = Date.now();
         setSyncStatus('idle');
       } catch (err: any) {
-        console.error("Cloud Push Failed:", err);
         setSyncStatus('error');
-        // Jika error karena ukuran file (logo/foto terlalu besar)
-        if (err.code === 'permission-denied' || err.message?.includes('too large')) {
-          alert('Gagal sinkron: Ukuran data (mungkin foto/logo) terlalu besar. Gunakan gambar yang lebih kecil.');
-        }
       }
-    }, 2500); // Debounce push
-
+    }, 2500);
     return () => clearTimeout(timer);
   }, [lksData, pmData, lettersData, appName, allUsers, appLogo]);
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    const saved = localStorage.getItem('si-lks-notifications');
+    return saved ? JSON.parse(saved).map((n: any) => ({ ...n, time: new Date(n.time) })) : [];
+  });
   
+  useEffect(() => {
+    localStorage.setItem('si-lks-notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
     const newNotif: Notification = {
@@ -185,7 +177,7 @@ const App: React.FC = () => {
       time: new Date(),
       isRead: false
     };
-    setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+    setNotifications(prev => [newNotif, ...prev].slice(0, 50));
   };
 
   const handleLogin = (user: UserAccount) => {
@@ -219,6 +211,8 @@ const App: React.FC = () => {
       />
     );
   }
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter">
@@ -282,11 +276,11 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   {cloudConfig?.apiKey ? (
                     syncStatus === 'syncing' ? (
-                      <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Menyimpan ke Cloud...</p></>
+                      <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Sinkronisasi...</p></>
                     ) : syncStatus === 'error' ? (
                       <><AlertCircle size={10} className="text-red-500" /><p className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Gagal Sinkron</p></>
                     ) : (
-                      <><Cloud size={10} className="text-emerald-500" /><p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Cloud Terhubung</p></>
+                      <><Cloud size={10} className="text-emerald-500" /><p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Cloud Aktif</p></>
                     )
                   ) : (
                     <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Mode Lokal</p></>
@@ -295,7 +289,41 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
+             <div className="relative">
+                <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-3 bg-slate-50 text-slate-500 rounded-2xl hover:bg-slate-100 transition-all relative group">
+                  <Bell size={20} className="group-hover:rotate-12 transition-transform" />
+                  {unreadCount > 0 && <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">{unreadCount}</span>}
+                </button>
+                {showNotifPanel && (
+                  <div className="absolute top-16 right-0 w-80 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 z-[100] animate-in slide-in-from-top-4 duration-300 overflow-hidden">
+                    <div className="p-6 border-b flex items-center justify-between bg-slate-50/50">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-800">Pemberitahuan</h4>
+                      <button onClick={() => { setNotifications(notifications.map(n => ({...n, isRead: true}))); setShowNotifPanel(false); }} className="text-[9px] font-black text-blue-600 uppercase hover:underline">Baca Semua</button>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto no-scrollbar">
+                      {notifications.length > 0 ? notifications.map(n => (
+                        <div key={n.id} className={`p-4 border-b last:border-0 transition-colors ${n.isRead ? 'opacity-60' : 'bg-blue-50/30'}`}>
+                          <div className="flex gap-3">
+                             <div className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${n.action.includes('Hapus') ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                                {n.action.includes('Tambah') ? <CheckCircle size={16}/> : n.action.includes('Hapus') ? <Trash2 size={16}/> : <RefreshCw size={16}/>}
+                             </div>
+                             <div>
+                               <p className="text-xs font-bold text-slate-800"><span className="text-blue-600">{n.user}</span> {n.action} <span className="text-slate-900 font-black">{n.target}</span></p>
+                               <p className="text-[9px] text-slate-400 font-medium mt-1 uppercase">{n.time.toLocaleTimeString('id-ID')}</p>
+                             </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="p-10 text-center text-slate-300 italic text-xs font-medium">Belum ada aktivitas baru.</div>
+                      )}
+                    </div>
+                    {notifications.length > 0 && (
+                      <button onClick={() => { setNotifications([]); setShowNotifPanel(false); }} className="w-full py-4 text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 transition-colors border-t">Hapus Semua Riwayat</button>
+                    )}
+                  </div>
+                )}
+             </div>
              <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group">
                 <div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">
                    {currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}
@@ -311,10 +339,10 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 no-scrollbar">
           <div className="max-w-7xl mx-auto pb-20">
             {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} onNavigateToItem={handleNavigateToDetail} />}
-            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
-            {activePage === 'administrasi' && <AdministrasiPage data={lksData} />}
+            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} appLogo={appLogo} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
+            {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={(action, target) => addNotification(action, target)} />}
             {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} initialSelectedPmId={navContext?.type === 'PM' ? navContext.id : undefined} onNotify={(action, target) => addNotification(action, target)} />}
-            {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={(action, target) => addNotification(action, target)} />}
+            {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={(action, target) => addNotification(action, target)} appLogo={appLogo} />}
             {activePage === 'profile' && currentUser && (
               <ProfilePage 
                 currentUser={currentUser} 
