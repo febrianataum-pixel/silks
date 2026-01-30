@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline, Copy, Edit3, AlertTriangle, FileJson, CheckCircle } from 'lucide-react';
+import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline, Copy, Edit3, AlertTriangle, FileJson, CheckCircle, Camera } from 'lucide-react';
 import { LKS, LetterRecord } from '../types';
 
 declare const html2pdf: any;
@@ -45,7 +45,13 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
     const savedConcept = localStorage.getItem('si-lks-letter-concept');
     if (savedConcept && !editingLetterId && isCreating) {
       const concept = JSON.parse(savedConcept);
-      setFormData(prev => ({ ...prev, ...concept, lksId: prev.lksId, nomorSurat: prev.nomorSurat, tanggalSurat: prev.tanggalSurat }));
+      setFormData(prev => ({ 
+        ...prev, 
+        ...concept, 
+        lksId: prev.lksId, 
+        nomorSurat: prev.nomorSurat, 
+        tanggalSurat: prev.tanggalSurat 
+      }));
       if (editorRef.current) editorRef.current.innerHTML = concept.konten;
     }
   }, [isCreating, editingLetterId]);
@@ -53,6 +59,37 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
   const handleCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
+  };
+
+  const compressImage = (file: File, maxSize: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height) { if (width > maxSize) { height *= maxSize / width; width = maxSize; } }
+          else { if (height > maxSize) { width *= maxSize / height; height = maxSize; } }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+      };
+    });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const base64 = await compressImage(file, 300);
+      setFormData(prev => ({ ...prev, letterLogo: base64 }));
+    }
   };
 
   const handleSaveConcept = () => {
@@ -64,7 +101,7 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
     localStorage.setItem('si-lks-letter-concept', JSON.stringify(conceptData));
     setTimeout(() => {
       setIsSavingConcept(false);
-      alert('Konsep surat berhasil disimpan sebagai template default.');
+      alert('Konsep surat, logo, dan profil penandatangan berhasil disimpan sebagai template default.');
       if (onNotify) onNotify('Simpan Konsep', 'Template Surat');
     }, 800);
   };
@@ -87,9 +124,20 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
 
   const handleSave = () => {
     if (!formData.lksId) return alert('Pilih LKS dahulu');
-    const letterToSave = { ...formData, id: editingLetterId || Math.random().toString(36).substr(2, 9), tanggal: new Date(formData.tanggalSurat).toISOString(), konten: editorRef.current?.innerHTML || '' };
-    if (editingLetterId) { setLetters(prev => prev.map(l => l.id === editingLetterId ? (letterToSave as any) : l)); if (onNotify) onNotify('Update Surat', formData.nomorSurat); }
-    else { setLetters(prev => [letterToSave as any, ...prev]); if (onNotify) onNotify('Buat Surat', formData.nomorSurat); }
+    const letterToSave = { 
+      ...formData, 
+      id: editingLetterId || Math.random().toString(36).substr(2, 9), 
+      tanggal: new Date(formData.tanggalSurat).toISOString(), 
+      konten: editorRef.current?.innerHTML || '' 
+    };
+    if (editingLetterId) { 
+      setLetters(prev => prev.map(l => l.id === editingLetterId ? (letterToSave as any) : l)); 
+      if (onNotify) onNotify('Update Surat', formData.nomorSurat); 
+    }
+    else { 
+      setLetters(prev => [letterToSave as any, ...prev]); 
+      if (onNotify) onNotify('Buat Surat', formData.nomorSurat); 
+    }
     setIsCreating(false); setEditingLetterId(null); setFormData(initialFormData);
   };
 
@@ -103,7 +151,13 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
     const element = document.getElementById('print-letter-surface');
     if (!element) return;
     setIsGenerating(true);
-    const options = { margin: 5, filename: `Rekomendasi_${formData.nomorSurat.replace(/\//g, '-')}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+    const options = { 
+      margin: 5, 
+      filename: `Rekomendasi_${formData.nomorSurat.replace(/\//g, '-')}.pdf`, 
+      image: { type: 'jpeg', quality: 0.98 }, 
+      html2canvas: { scale: 2, useCORS: true }, 
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+    };
     try { await html2pdf().set(options).from(element).save(); } catch (err) { alert('Gagal.'); } finally { setIsGenerating(false); }
   };
 
@@ -143,21 +197,53 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="space-y-4 no-print h-fit sticky top-24 overflow-y-auto max-h-[85vh] no-scrollbar pr-2">
-               <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-6">
-                  <div className="space-y-4"><h4 className="text-[10px] font-black text-blue-600 uppercase border-b pb-2">Data Lembaga & Surat</h4>
+               <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-8">
+                  {/* Data Surat */}
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-blue-600 uppercase border-b pb-2 tracking-widest">I. Data Lembaga & Surat</h4>
                     <select className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-xs" value={formData.lksId} onChange={e=>setFormData({...formData, lksId: e.target.value})}><option value="">-- Pilih Lembaga --</option>{lksData.map(l => <option key={l.id} value={l.id}>{l.nama}</option>)}</select>
-                    <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.nomorSurat} onChange={e=>setFormData({...formData, nomorSurat: e.target.value})} placeholder="Nomor Surat" />
-                    <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.recipientName} onChange={e=>setFormData({...formData, recipientName: e.target.value})} placeholder="Tujuan Surat" />
+                    <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nomor Surat</label><input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.nomorSurat} onChange={e=>setFormData({...formData, nomorSurat: e.target.value})} /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Tujuan (Yth.)</label><input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.recipientName} onChange={e=>setFormData({...formData, recipientName: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-4 pt-2"><h4 className="text-[10px] font-black text-emerald-600 uppercase border-b pb-2">Editor Toolbar</h4>
-                    <div className="grid grid-cols-4 gap-2"><button onClick={()=>handleCommand('bold')} className="p-2 border rounded-xl hover:bg-slate-50"><Bold size={16}/></button><button onClick={()=>handleCommand('italic')} className="p-2 border rounded-xl hover:bg-slate-50"><Italic size={16}/></button><button onClick={()=>handleCommand('underline')} className="p-2 border rounded-xl hover:bg-slate-50"><Underline size={16}/></button><button onClick={()=>handleCommand('justifyLeft')} className="p-2 border rounded-xl hover:bg-slate-50"><AlignLeft size={16}/></button></div>
+
+                  {/* Konfigurasi Penandatangan */}
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-indigo-600 uppercase border-b pb-2 tracking-widest">II. Kop & Penandatangan</h4>
+                    <div className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                       <div className="w-16 h-16 bg-white rounded-xl shadow-sm overflow-hidden flex items-center justify-center border">
+                          <img src={formData.letterLogo} className="w-full h-full object-contain" alt="Logo" />
+                       </div>
+                       <label className="cursor-pointer px-4 py-2 bg-white border rounded-xl text-[9px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                          UNGGAH LOGO KOP
+                          <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                       </label>
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nama Kepala Dinas</label>
+                       <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.namaPenandatangan} onChange={e=>setFormData({...formData, namaPenandatangan: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-1">NIP Pejabat</label>
+                       <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.nipPenandatangan} onChange={e=>setFormData({...formData, nipPenandatangan: e.target.value})} />
+                    </div>
+                  </div>
+
+                  {/* Editor Toolbar */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-[10px] font-black text-emerald-600 uppercase border-b pb-2 tracking-widest">III. Editor Toolbar</h4>
+                    <div className="grid grid-cols-4 gap-2">
+                      <button onClick={()=>handleCommand('bold')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Bold size={16}/></button>
+                      <button onClick={()=>handleCommand('italic')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Italic size={16}/></button>
+                      <button onClick={()=>handleCommand('underline')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Underline size={16}/></button>
+                      <button onClick={()=>handleCommand('justifyLeft')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><AlignLeft size={16}/></button>
+                    </div>
                   </div>
                </div>
             </div>
             <div className="lg:col-span-3">
               <div id="print-letter-surface" className="bg-white min-h-[1100px] shadow-2xl p-[1cm_1.5cm] arial-force relative text-black">
                  <div className="flex items-center gap-8 border-b-4 border-double border-black pb-2 mb-4 text-center justify-center arial-force">
-                    <img src={appLogo || defaultLogo} className="max-h-24 max-w-[100px] object-contain" alt="Logo" />
+                    <img src={formData.letterLogo} className="max-h-24 max-w-[100px] object-contain" alt="Logo" />
                     <div className="flex-1 arial-force">
                       <h1 className="text-lg font-bold uppercase leading-tight arial-force">PEMERINTAH KABUPATEN BLORA</h1>
                       <h2 className="text-xl font-black uppercase leading-tight arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
@@ -172,7 +258,14 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
                       <div className="text-right whitespace-nowrap"><span>Blora, {formatDate(formData.tanggalSurat)}</span></div>
                     </div>
                     <div ref={editorRef} contentEditable className="min-h-[600px] outline-none text-justify whitespace-pre-wrap leading-relaxed letter-body arial-force" />
-                    <div className="flex justify-end pt-4 arial-force"><div className="text-left w-[350px]"><p className="font-normal leading-tight arial-force">{formData.penandatanganJabatan}</p><div className="h-20"></div><p className="font-bold border-b border-black inline-block uppercase">{formData.namaPenandatangan}</p><p className="text-[11pt]">NIP. {formData.nipPenandatangan}</p></div></div>
+                    <div className="flex justify-end pt-4 arial-force">
+                      <div className="text-left w-[350px]">
+                        <p className="font-normal leading-tight arial-force">{formData.penandatanganJabatan}</p>
+                        <div className="h-20"></div>
+                        <p className="font-bold border-b border-black inline-block uppercase">{formData.namaPenandatangan}</p>
+                        <p className="text-[11pt]">NIP. {formData.nipPenandatangan}</p>
+                      </div>
+                    </div>
                  </div>
               </div>
             </div>
@@ -182,10 +275,22 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
       {deleteConfirmId && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmId(null)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center animate-in zoom-in-95"><div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={36} /></div><h3 className="text-2xl font-black text-slate-800 mb-2">Hapus Arsip?</h3><div className="flex gap-4 mt-10"><button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase">BATAL</button><button onClick={() => { setLetters(prev => prev.filter(l => l.id !== deleteConfirmId)); setDeleteConfirmId(null); }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase shadow-lg">HAPUS</button></div></div>
+          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center animate-in zoom-in-95 shadow-2xl">
+            <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={36} /></div>
+            <h3 className="text-2xl font-black text-slate-800 mb-2">Hapus Arsip Surat?</h3>
+            <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Data surat ini akan dihapus permanen dari arsip rekomendasi.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+              <button onClick={() => { setLetters(prev => prev.filter(l => l.id !== deleteConfirmId)); setDeleteConfirmId(null); }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">HAPUS ARSIP</button>
+            </div>
+          </div>
         </div>
       )}
-      <style>{`.arial-force { font-family: Arial, Helvetica, sans-serif !important; } .letter-body p { margin-bottom: 0.5rem; } .no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+      <style>{`
+        .arial-force { font-family: Arial, Helvetica, sans-serif !important; }
+        .letter-body p { margin-bottom: 0.5rem; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
     </div>
   );
 };
