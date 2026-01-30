@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { User, Shield, Trash2, UserPlus, Settings, Save, Image as ImageIcon, Camera, AlertTriangle, RefreshCw, Download, Upload, Share2, Cloud, ShieldCheck, CheckCircle2, Info, Loader2 } from 'lucide-react';
 import { UserAccount } from '../types';
 
@@ -14,6 +14,7 @@ interface ProfileProps {
   setAppLogo: (logo: string | null) => void;
   cloudConfig: {apiKey: string, projectId: string} | null;
   setCloudConfig: (config: {apiKey: string, projectId: string} | null) => void;
+  onSyncLock?: (locked: boolean) => void;
 }
 
 const Profile: React.FC<ProfileProps> = ({ 
@@ -26,10 +27,11 @@ const Profile: React.FC<ProfileProps> = ({
   appLogo,
   setAppLogo,
   cloudConfig,
-  setCloudConfig
+  setCloudConfig,
+  onSyncLock
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'admin' | 'system' | 'data'>('data');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'admin' | 'system' | 'data'>('profile');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   
   const [editNama, setEditNama] = useState(currentUser.nama);
@@ -41,7 +43,12 @@ const Profile: React.FC<ProfileProps> = ({
   const [tempAppName, setTempAppName] = useState(appName);
   const [newUser, setNewUser] = useState({ username: '', password: '', nama: '', role: 'User' as any });
 
-  // Util: Ultra-Aggressive Image Compression Engine
+  // Sinkronkan local state jika ada perubahan dari Cloud/App.tsx
+  useEffect(() => {
+    setEditNama(currentUser.nama);
+  }, [currentUser.nama]);
+
+  // Util: Ultra-Aggressive Image Compression (128px for avatars, 300px for logos)
   const compressImage = (file: File, maxSize: number): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -70,104 +77,116 @@ const Profile: React.FC<ProfileProps> = ({
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          // High compression quality (0.5) to keep document size small for cloud
           resolve(canvas.toDataURL('image/jpeg', 0.5));
         };
       };
     });
   };
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSyncing(true);
-    
-    setTimeout(() => {
-      const updatedUser: UserAccount = { ...currentUser, nama: editNama };
+    setIsProcessing(true);
+    if (onSyncLock) onSyncLock(true);
+
+    try {
+      const updatedUser = { ...currentUser, nama: editNama };
       if (newPassword && newPassword.trim() !== '') updatedUser.password = newPassword;
       
-      const newAllUsers = allUsers.map(u => u.id === currentUser.id ? updatedUser : u);
-      setAllUsers(newAllUsers); // Trigger cloud sync via App.tsx
+      // Gunakan functional update untuk menjamin referensi baru
+      setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
       onUpdateCurrentUser(updatedUser);
       
       setNewPassword('');
-      setIsSyncing(false);
-      alert('Profil berhasil disimpan dan akan disinkronkan.');
-    }, 500);
-  };
-
-  const handleActivateCloudSync = () => {
-    if (!firebaseApiKey || !firebaseProjectId) return alert('Lengkapi konfigurasi.');
-    setIsSyncing(true);
-    setTimeout(() => {
-      setCloudConfig({ apiKey: firebaseApiKey, projectId: firebaseProjectId });
-      setIsSyncing(false);
-      alert('Sistem Cloud Global Aktif!');
-    }, 1000);
+      alert('Profil diperbarui secara lokal. Sistem sedang mengunggah perubahan ke Cloud...');
+    } catch (err) {
+      alert('Gagal menyimpan profil.');
+    } finally {
+      setIsProcessing(false);
+      // Tunggu 5 detik baru lepas lock agar PUSH sempat jalan
+      setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
+    }
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsProcessingImage(true);
+      if (onSyncLock) onSyncLock(true);
       try {
-        const compressedBase64 = await compressImage(file, 200); // 200px only for profile
+        const compressedBase64 = await compressImage(file, 128);
         const updatedUser = { ...currentUser, avatar: compressedBase64 };
         
-        const newAllUsers = allUsers.map(u => u.id === currentUser.id ? updatedUser : u);
-        setAllUsers(newAllUsers);
+        setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
         onUpdateCurrentUser(updatedUser);
       } catch (err) {
-        alert('Gagal mengunggah foto profil.');
+        alert('Gagal memproses foto.');
       } finally {
         setIsProcessingImage(false);
+        setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
       }
     }
-  };
-
-  const handleSaveSystemSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAppName(tempAppName);
-    alert('Identitas sistem diperbarui.');
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsProcessingImage(true);
+      if (onSyncLock) onSyncLock(true);
       try {
-        const compressedBase64 = await compressImage(file, 400); // 400px max for logo
-        setAppLogo(compressedBase64); // Parent's setAppLogo will trigger cloud sync
+        const compressedBase64 = await compressImage(file, 300);
+        setAppLogo(compressedBase64);
       } catch (err) {
-        alert('Gagal mengunggah logo.');
+        alert('Gagal memproses logo.');
       } finally {
         setIsProcessingImage(false);
+        setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
       }
     }
+  };
+
+  const handleSaveSystemSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onSyncLock) onSyncLock(true);
+    setAppName(tempAppName);
+    alert('Identitas sistem diperbarui.');
+    setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
   };
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.username || !newUser.password) return alert('Lengkapi data.');
-    
-    if (allUsers.find(u => u.username === newUser.username)) return alert('Username sudah ada.');
+    if (allUsers.find(u => u.username === newUser.username)) return alert('Username sudah digunakan.');
 
+    if (onSyncLock) onSyncLock(true);
     const userToAdd: UserAccount = {
       id: Math.random().toString(36).substr(2, 9),
       ...newUser,
       createdAt: new Date().toISOString()
     };
     
-    setAllUsers([...allUsers, userToAdd]);
+    setAllUsers(prev => [...prev, userToAdd]);
     setNewUser({ username: '', password: '', nama: '', role: 'User' });
-    alert('User baru ditambahkan dan akan segera sinkron ke cloud.');
+    alert('User baru berhasil ditambahkan.');
+    setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
   };
 
   const handleDeleteUser = (id: string) => {
     if (id === currentUser.id) return alert('Anda tidak bisa menghapus diri sendiri.');
-    if (confirm('Hapus akun ini secara permanen dari Cloud?')) {
-      const filtered = allUsers.filter(u => u.id !== id);
-      setAllUsers(filtered);
+    if (confirm('Hapus akun ini dari sistem secara permanen?')) {
+      if (onSyncLock) onSyncLock(true);
+      setAllUsers(prev => prev.filter(u => u.id !== id));
+      setTimeout(() => { if (onSyncLock) onSyncLock(false); }, 5000);
     }
+  };
+
+  const handleActivateCloudSync = () => {
+    if (!firebaseApiKey || !firebaseProjectId) return alert('Lengkapi konfigurasi.');
+    setIsProcessing(true);
+    setTimeout(() => {
+      setCloudConfig({ apiKey: firebaseApiKey, projectId: firebaseProjectId });
+      setIsProcessing(false);
+      alert('Sinkronisasi Cloud Aktif!');
+    }, 1000);
   };
 
   return (
@@ -203,49 +222,53 @@ const Profile: React.FC<ProfileProps> = ({
               <div className="text-center md:text-left">
                  <h2 className="text-3xl font-black text-slate-800">{currentUser.nama}</h2>
                  <p className="text-blue-600 font-bold uppercase text-[10px] tracking-widest mt-1">{currentUser.role}</p>
+                 <p className="text-slate-400 text-xs mt-4 font-medium italic">Klik foto untuk mengganti avatar profil Anda.</p>
               </div>
            </div>
            <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nama Lengkap</label><input type="text" value={editNama} onChange={e => setEditNama(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
               <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ganti Password</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Biarkan kosong jika tidak ganti" className="w-full px-5 py-4 bg-slate-50 border rounded-2xl" /></div>
-              <button type="submit" className="md:col-span-2 px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Simpan & Sinkronkan</button>
+              <div className="md:col-span-2 flex justify-end">
+                <button type="submit" disabled={isProcessing} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-3 active:scale-95 transition-all">
+                   {isProcessing ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />} 
+                   {isProcessing ? 'MENYIMPAN...' : 'SIMPAN PERUBAHAN'}
+                </button>
+              </div>
            </form>
         </div>
       )}
 
       {activeTab === 'data' && (
-        <div className="space-y-10">
-           <div className="bg-[#0f172a] p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden group border border-white/10">
-              <div className="flex flex-col md:flex-row items-center gap-8 mb-12 relative z-10">
-                 <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-500/20"><Cloud size={36} fill="white" /></div>
-                 <div className="text-center md:text-left">
-                    <h2 className="text-3xl font-black text-white tracking-tighter uppercase">HUBUNGAN <span className="text-blue-500">CLOUD REALTIME</span></h2>
-                    <p className="text-slate-400 text-sm font-bold mt-1">Gunakan API Key yang sama di Laptop & HP Anda.</p>
-                 </div>
+        <div className="bg-[#0f172a] p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden group border border-white/10">
+          <div className="flex flex-col md:flex-row items-center gap-8 mb-12 relative z-10">
+              <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-blue-500/20"><Cloud size={36} fill="white" /></div>
+              <div className="text-center md:text-left">
+                <h2 className="text-3xl font-black text-white tracking-tighter uppercase">HUBUNGAN <span className="text-blue-500">CLOUD REALTIME</span></h2>
+                <p className="text-slate-400 text-sm font-bold mt-1">Sinkronisasi data antar perangkat secara otomatis.</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                 <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">FIREBASE API KEY</label><input type="password" value={firebaseApiKey} onChange={e => setFirebaseApiKey(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
-                 <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">PROJECT ID</label><input type="text" value={firebaseProjectId} onChange={e => setFirebaseProjectId(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
-              </div>
-              <div className="mt-12 flex flex-col md:flex-row justify-center md:justify-end gap-4 relative z-10">
-                 <button onClick={handleActivateCloudSync} disabled={isSyncing} className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-5 rounded-[1.8rem] font-black text-sm uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center gap-4">
-                    {isSyncing ? <RefreshCw size={22} className="animate-spin" /> : <ShieldCheck size={22} />} {isSyncing ? 'MENGHUBUNGKAN...' : 'AKTIFKAN SINKRONISASI'}
-                 </button>
-              </div>
-              {cloudConfig?.apiKey && (
-                <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 text-emerald-500"><CheckCircle2 size={16} /><span className="text-[10px] font-black uppercase tracking-widest">Tersambung ke Cloud Global</span></div>
-                  <button onClick={() => window.location.reload()} className="text-[9px] font-black text-slate-500 uppercase hover:text-white transition-all underline">Segarkan Halaman (Tarik Data Baru)</button>
-                </div>
-              )}
-           </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+              <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">FIREBASE API KEY</label><input type="password" value={firebaseApiKey} onChange={e => setFirebaseApiKey(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
+              <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">PROJECT ID</label><input type="text" value={firebaseProjectId} onChange={e => setFirebaseProjectId(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
+          </div>
+          <div className="mt-12 flex flex-col md:flex-row justify-center md:justify-end gap-4 relative z-10">
+              <button onClick={handleActivateCloudSync} disabled={isProcessing} className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-5 rounded-[1.8rem] font-black text-sm uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center gap-4">
+                {isProcessing ? <RefreshCw size={22} className="animate-spin" /> : <ShieldCheck size={22} />} AKTIFKAN SINKRONISASI
+              </button>
+          </div>
+          {cloudConfig?.apiKey && (
+            <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 text-emerald-400 font-bold uppercase text-[10px] tracking-widest"><CheckCircle2 size={16} /> Cloud Aktif Tersambung</div>
+              <button onClick={() => window.location.reload()} className="text-[9px] font-black text-slate-500 uppercase hover:text-white transition-all underline">Segarkan Halaman (Tarik Data Baru)</button>
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'admin' && (
         <div className="space-y-8 animate-in fade-in">
            <div className="bg-white p-10 rounded-[3rem] border shadow-sm">
-              <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3"><UserPlus size={20} className="text-blue-600" /> Tambah Akun Baru</h3>
+              <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3"><UserPlus size={20} className="text-blue-600" /> Tambah Akun Pengguna</h3>
               <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400">Username</label><input type="text" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" /></div>
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400">Password</label><input type="password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl font-bold text-sm" /></div>
@@ -271,7 +294,7 @@ const Profile: React.FC<ProfileProps> = ({
 
       {activeTab === 'system' && (
         <div className="bg-white p-10 rounded-[3rem] border shadow-sm">
-           <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3"><Settings size={20} className="text-indigo-600" /> Nama & Logo Aplikasi</h3>
+           <h3 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3"><Settings size={20} className="text-indigo-600" /> Identitas Aplikasi</h3>
            <form onSubmit={handleSaveSystemSettings} className="grid grid-cols-1 md:grid-cols-2 gap-12">
               <div className="space-y-6">
                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nama Aplikasi</label><input type="text" value={tempAppName} onChange={e => setTempAppName(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-black uppercase" /></div>
@@ -290,6 +313,7 @@ const Profile: React.FC<ProfileProps> = ({
                     {appLogo ? 'Ganti Logo' : 'Pilih Logo'}
                     <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={isProcessingImage} />
                  </label>
+                 {appLogo && <button type="button" onClick={() => setAppLogo(null)} className="text-[9px] font-black text-red-500 uppercase hover:underline">Hapus Logo</button>}
               </div>
            </form>
         </div>

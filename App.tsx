@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
 import AdministrasiPage from './pages/Administrasi';
@@ -65,7 +65,8 @@ const App: React.FC = () => {
 
   // Cloud Sync State
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
-  const lastSyncTime = useRef<number>(0);
+  const lastWriteTime = useRef<number>(0);
+  const isSyncLocked = useRef<boolean>(false);
 
   // Persistence to LocalStorage
   useEffect(() => {
@@ -80,7 +81,7 @@ const App: React.FC = () => {
     if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
   }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig]);
 
-  // --- FIREBASE REALTIME CLOUD PULL ---
+  // --- CLOUD PULL LOGIC (Listen for external changes) ---
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
 
@@ -96,13 +97,16 @@ const App: React.FC = () => {
       const dataDocRef = doc(db, 'si-lks-v1', 'global_data');
 
       const unsubscribe = onSnapshot(dataDocRef, (docSnap) => {
+        // Jangan timpa data lokal jika kita sedang mengunci sinkronisasi (sedang mengetik/mengupload)
+        if (isSyncLocked.current) return;
+        
+        // Jangan timpa data lokal jika kita baru saja melakukan push dalam 10 detik terakhir
+        const now = Date.now();
+        if (now - lastWriteTime.current < 10000) return;
+
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
           
-          // Hindari update jika kita baru saja mengunggah data ini (mencegah loop)
-          const now = Date.now();
-          if (now - lastSyncTime.current < 3000) return;
-
           if (remoteData.lks) setLksData(remoteData.lks);
           if (remoteData.pm) setPmData(remoteData.pm);
           if (remoteData.letters) setLettersData(remoteData.letters);
@@ -116,21 +120,25 @@ const App: React.FC = () => {
               setCurrentUser(updatedSelf);
             }
           }
-          
           setSyncStatus('idle');
         }
+      }, (err) => {
+        console.error("Firebase Pull Error:", err);
+        setSyncStatus('error');
       });
 
       return () => unsubscribe();
     } catch (err) {
-      console.error("Cloud Error:", err);
       setSyncStatus('error');
     }
-  }, [cloudConfig?.apiKey]);
+  }, [cloudConfig?.apiKey, cloudConfig?.projectId]);
 
-  // --- FIREBASE CLOUD PUSH ---
+  // --- CLOUD PUSH LOGIC (Save changes to cloud) ---
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) return;
+
+    // Set lastWriteTime segera setelah state berubah untuk memblokir PULL
+    lastWriteTime.current = Date.now();
 
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
@@ -149,12 +157,18 @@ const App: React.FC = () => {
           lastUpdated: new Date().toISOString()
         }, { merge: true });
 
-        lastSyncTime.current = Date.now();
+        // Update waktu sukses penulisan
+        lastWriteTime.current = Date.now();
         setSyncStatus('idle');
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Cloud Push Failed:", err);
         setSyncStatus('error');
+        // Jika error karena ukuran file (logo/foto terlalu besar)
+        if (err.code === 'permission-denied' || err.message?.includes('too large')) {
+          alert('Gagal sinkron: Ukuran data (mungkin foto/logo) terlalu besar. Gunakan gambar yang lebih kecil.');
+        }
       }
-    }, 4000); // Jeda lebih lama untuk memastikan state stabil
+    }, 2500); // Debounce push
 
     return () => clearTimeout(timer);
   }, [lksData, pmData, lettersData, appName, allUsers, appLogo]);
@@ -268,11 +282,11 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   {cloudConfig?.apiKey ? (
                     syncStatus === 'syncing' ? (
-                      <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Sinkronisasi Cloud...</p></>
+                      <><RefreshCw size={10} className="text-blue-500 animate-spin" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Menyimpan ke Cloud...</p></>
                     ) : syncStatus === 'error' ? (
-                      <><CloudOff size={10} className="text-red-500" /><p className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Gagal Sinkron</p></>
+                      <><AlertCircle size={10} className="text-red-500" /><p className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Gagal Sinkron</p></>
                     ) : (
-                      <><Cloud size={10} className="text-blue-500" /><p className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Cloud Aktif</p></>
+                      <><Cloud size={10} className="text-emerald-500" /><p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Cloud Terhubung</p></>
                     )
                   ) : (
                     <><CloudOff size={10} className="text-slate-300" /><p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">Mode Lokal</p></>
@@ -313,6 +327,7 @@ const App: React.FC = () => {
                 setAppLogo={setAppLogo}
                 cloudConfig={cloudConfig}
                 setCloudConfig={setCloudConfig}
+                onSyncLock={(locked) => { isSyncLocked.current = locked; }}
               />
             )}
           </div>
