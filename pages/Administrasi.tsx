@@ -5,7 +5,7 @@ import {
   ShieldCheck, UserCheck, FileText, Award, AlertCircle, 
   ExternalLink, Eye, Info, X, FileSearch, MapPin, Download,
   Fingerprint, Calendar, CheckCircle2, Maximize2, Loader2,
-  ExternalLink as OpenIcon, Trash2
+  ExternalLink as OpenIcon, Trash2, FileType
 } from 'lucide-react';
 import { LKS } from '../types';
 
@@ -97,110 +97,91 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
-            <FileCheck size={28} />
-          </div>
-          <div>
-            <h3 className="text-2xl font-black text-slate-800">{data.filter(l => Object.keys(l.dokumen || {}).length === 4).length}</h3>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Dokumen Lengkap</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-            <AlertCircle size={28} />
-          </div>
-          <div>
-            <h3 className="text-2xl font-black text-slate-800">{data.filter(l => Object.keys(l.dokumen || {}).length < 4).length}</h3>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Perlu Melengkapi</p>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 lg:space-y-6">
+      {/* Stats - Grid optimized for mobile */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-6">
+        <div className="bg-white p-4 lg:p-6 rounded-[1.5rem] lg:rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-3 lg:gap-4">
+          <div className="w-10 h-10 lg:w-14 lg:h-14 bg-emerald-50 text-emerald-600 rounded-xl lg:rounded-2xl flex items-center justify-center shrink-0"><FileCheck size={20} className="lg:hidden" /><FileCheck size={28} className="hidden lg:block" /></div>
+          <div className="min-w-0">
+            <h3 className="text-lg lg:text-2xl font-black text-slate-800">{data.filter(l => Object.keys(l.dokumen || {}).length === 4).length}</h3>
+            <p className="text-[7px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Lengkap</p>
           </div>
         </div>
-        <div className="bg-slate-900 p-6 rounded-[2rem] text-white flex items-center gap-4 shadow-xl shadow-slate-900/20">
-          <div className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center">
-            <FileSearch size={28} />
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-1">Status Pantauan</p>
-            <h3 className="text-xl font-black uppercase leading-tight">Arsip Dokumen</h3>
+        <div className="bg-white p-4 lg:p-6 rounded-[1.5rem] lg:rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-3 lg:gap-4">
+          <div className="w-10 h-10 lg:w-14 lg:h-14 bg-amber-50 text-amber-600 rounded-xl lg:rounded-2xl flex items-center justify-center shrink-0"><AlertCircle size={20} className="lg:hidden" /><AlertCircle size={28} className="hidden lg:block" /></div>
+          <div className="min-w-0">
+            <h3 className="text-lg lg:text-2xl font-black text-slate-800">{data.filter(l => Object.keys(l.dokumen || {}).length < 4).length}</h3>
+            <p className="text-[7px] lg:text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">Melengkapi</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4">
+      <div className="bg-white p-3 lg:p-4 rounded-[1.5rem] lg:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-3 lg:gap-4">
         <div className="flex-1 relative w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
             type="text" 
-            placeholder="Cari LKS berdasarkan nama..." 
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium" 
+            placeholder="Cari LKS..." 
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm font-medium" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
         </div>
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border">
+        <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border w-full lg:w-auto">
           {(['all', 'lengkap', 'belum'] as const).map(f => (
             <button 
               key={f} 
               onClick={() => setStatusFilter(f)} 
-              className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === f ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'}`}
+              className={`flex-1 lg:flex-none px-3 lg:px-5 py-2 rounded-lg text-[8px] lg:text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === f ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500'}`}
             >
-              {f === 'all' ? 'Semua' : f === 'lengkap' ? 'Lengkap' : 'Belum'}
+              {f === 'all' ? 'Semua' : f === 'lengkap' ? 'Ok' : 'Kurang'}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-3 lg:gap-6">
         {filteredData.map((lks) => {
           const docCount = Object.keys(lks.dokumen || {}).length;
           const isLengkap = docCount === 4;
           return (
-            <div key={lks.id} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <div className="flex flex-col lg:flex-row">
+            <div key={lks.id} className="bg-white rounded-[1.5rem] lg:rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden group">
+              {/* TAMPILAN MOBILE: Satu Baris Kompak */}
+              <div className="lg:hidden p-4 flex flex-col gap-3">
+                 <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                       <h4 className="font-black text-slate-800 text-xs uppercase truncate pr-2">{lks.nama}</h4>
+                       <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{lks.kecamatan}</p>
+                    </div>
+                    <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase ${isLengkap ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                       {docCount}/4
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-4 gap-2">
+                    <MiniDoc label="KTP" status={getDocStatus(lks, 'ktpKetua')} onOpen={() => handleOpenDoc(lks, "KTP", getFileData(lks, 'ktpKetua'), 'ktpKetua')} />
+                    <MiniDoc label="SK" status={getDocStatus(lks, 'skKemenkumham')} onOpen={() => handleOpenDoc(lks, "SK", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} />
+                    <MiniDoc label="Izin" status={getDocStatus(lks, 'tandaDaftar')} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} />
+                    <MiniDoc label="Akred" status={getDocStatus(lks, 'sertifikatAkreditasi')} onOpen={() => handleOpenDoc(lks, "Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} />
+                 </div>
+              </div>
+
+              {/* TAMPILAN LAPTOP (Asli) */}
+              <div className="hidden lg:flex flex-col lg:flex-row">
                 <div className="p-8 bg-slate-50/50 lg:w-80 border-r border-slate-100 flex flex-col justify-between">
                   <div>
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 mb-4 shadow-sm group-hover:scale-110 transition-transform"><Building2 size={24} /></div>
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 mb-4 shadow-sm"><Building2 size={24} /></div>
                     <h4 className="font-black text-slate-800 mb-1 leading-tight text-lg">{lks.nama}</h4>
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest flex items-center gap-1">
-                      <MapPin size={12} className="text-blue-500" /> {lks.kecamatan}
-                    </p>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest"><MapPin size={12} className="text-blue-500" /> {lks.kecamatan}</p>
                   </div>
                   <div className={`mt-6 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isLengkap ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {isLengkap ? <FileCheck size={14} /> : <AlertCircle size={14} />}
-                    {isLengkap ? 'Lengkap' : `${docCount}/4 Berkas`}
+                    {isLengkap ? <FileCheck size={14} /> : <AlertCircle size={14} />} {docCount}/4 Berkas
                   </div>
                 </div>
-                <div className="flex-1 p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <DocItem 
-                    label="KTP Ketua" 
-                    status={getDocStatus(lks, 'ktpKetua')} 
-                    icon={UserCheck} 
-                    onOpen={() => handleOpenDoc(lks, "KTP Ketua", getFileData(lks, 'ktpKetua'), 'ktpKetua')}
-                    onDelete={() => setDeleteConfirm({ lks, docKey: 'ktpKetua', docLabel: 'KTP Ketua' })}
-                  />
-                  <DocItem 
-                    label="SK Kemenkumham" 
-                    status={getDocStatus(lks, 'skKemenkumham')} 
-                    icon={ShieldCheck} 
-                    onOpen={() => handleOpenDoc(lks, "SK Kemenkumham", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')}
-                    onDelete={() => setDeleteConfirm({ lks, docKey: 'skKemenkumham', docLabel: 'SK Kemenkumham' })}
-                  />
-                  <DocItem 
-                    label="Tanda Daftar" 
-                    status={getDocStatus(lks, 'tandaDaftar')} 
-                    icon={FileText} 
-                    onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')}
-                    onDelete={() => setDeleteConfirm({ lks, docKey: 'tandaDaftar', docLabel: 'Surat Tanda Daftar' })}
-                  />
-                  <DocItem 
-                    label="Akreditasi" 
-                    status={getDocStatus(lks, 'sertifikatAkreditasi')} 
-                    icon={Award} 
-                    onOpen={() => handleOpenDoc(lks, "Sertifikat Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')}
-                    onDelete={() => setDeleteConfirm({ lks, docKey: 'sertifikatAkreditasi', docLabel: 'Sertifikat Akreditasi' })}
-                  />
+                <div className="flex-1 p-8 grid grid-cols-4 gap-6">
+                  <DocItem label="KTP Ketua" status={getDocStatus(lks, 'ktpKetua')} icon={UserCheck} onOpen={() => handleOpenDoc(lks, "KTP Ketua", getFileData(lks, 'ktpKetua'), 'ktpKetua')} onDelete={() => setDeleteConfirm({ lks, docKey: 'ktpKetua', docLabel: 'KTP Ketua' })} />
+                  <DocItem label="SK Kemenkumham" status={getDocStatus(lks, 'skKemenkumham')} icon={ShieldCheck} onOpen={() => handleOpenDoc(lks, "SK Kemenkumham", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} onDelete={() => setDeleteConfirm({ lks, docKey: 'skKemenkumham', docLabel: 'SK Kemenkumham' })} />
+                  <DocItem label="Tanda Daftar" status={getDocStatus(lks, 'tandaDaftar')} icon={FileText} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} onDelete={() => setDeleteConfirm({ lks, docKey: 'tandaDaftar', docLabel: 'Surat Tanda Daftar' })} />
+                  <DocItem label="Akreditasi" status={getDocStatus(lks, 'sertifikatAkreditasi')} icon={Award} onOpen={() => handleOpenDoc(lks, "Sertifikat Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} onDelete={() => setDeleteConfirm({ lks, docKey: 'sertifikatAkreditasi', docLabel: 'Sertifikat Akreditasi' })} />
                 </div>
               </div>
             </div>
@@ -209,22 +190,15 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
       </div>
 
       {previewDoc && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 lg:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setPreviewDoc(null)}></div>
-          <div className="relative bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col h-[92vh]">
-            <div className="p-6 border-b flex items-center justify-between bg-white">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg"><FileSearch size={24} /></div>
-                <div><h3 className="text-xl font-black text-slate-800 leading-tight">Pratinjau Dokumen</h3><p className="text-[10px] text-slate-400 font-black uppercase mt-1">{previewDoc.docLabel} — {previewDoc.lks.nama}</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                 <button onClick={() => window.open(pdfUrl || '', '_blank')} className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><OpenIcon size={16} /> Buka di Tab Baru</button>
-                 <button onClick={() => { const l = document.createElement('a'); l.href = pdfUrl || previewDoc.fileData; l.download = `${previewDoc.docLabel}.pdf`; l.click(); }} className="p-3 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-900 hover:text-white transition-all"><Download size={20} /></button>
-                 <button onClick={() => setPreviewDoc(null)} className="p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-600 transition-all"><X size={20} /></button>
-              </div>
+          <div className="relative bg-white w-full max-w-6xl h-full lg:h-[92vh] lg:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 lg:p-6 border-b flex items-center justify-between">
+              <h3 className="text-xs lg:text-xl font-black text-slate-800 uppercase truncate pr-4">{previewDoc.docLabel} — {previewDoc.lks.nama}</h3>
+              <button onClick={() => setPreviewDoc(null)} className="p-2 text-slate-400"><X size={20} /></button>
             </div>
-            <div className="flex-1 bg-slate-100 p-4 lg:p-10 flex flex-col items-center justify-center">
-              {isLoadingPdf ? <div className="flex flex-col items-center gap-4 animate-pulse"><Loader2 className="animate-spin text-blue-600" size={48} /><p className="text-[10px] font-black text-slate-500 uppercase">Memuat Berkas...</p></div> : pdfUrl ? <div className="w-full h-full bg-white rounded-3xl overflow-hidden border-4 border-white"><iframe src={`${pdfUrl}#toolbar=1`} className="w-full h-full border-none" /></div> : <div className="text-center p-20 bg-white rounded-[3rem] shadow-xl"><AlertCircle size={48} className="mx-auto text-amber-500 mb-4" /><p className="font-bold text-slate-600">Berkas tidak dapat dimuat.</p></div>}
+            <div className="flex-1 bg-slate-100 flex flex-col items-center justify-center relative">
+              {isLoadingPdf ? <Loader2 className="animate-spin text-blue-600" size={32} /> : pdfUrl ? <iframe src={`${pdfUrl}#toolbar=1`} className="w-full h-full" /> : <p className="text-slate-400 text-xs">Gagal memuat berkas.</p>}
             </div>
           </div>
         </div>
@@ -233,13 +207,12 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
       {deleteConfirm && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirm(null)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95">
-             <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><Trash2 size={36} /></div>
-             <h3 className="text-2xl font-black text-slate-800 mb-2">Hapus Berkas?</h3>
-             <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Hapus dokumen <b>{deleteConfirm.docLabel}</b> milik {deleteConfirm.lks.nama} secara permanen?</p>
-             <div className="flex gap-4">
-                <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
-                <button onClick={handleDeleteDocument} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 active:scale-95 transition-all">HAPUS SEKARANG</button>
+          <div className="relative bg-white w-full max-w-md rounded-[2rem] p-8 text-center animate-in zoom-in-95 shadow-2xl">
+             <h3 className="text-lg font-black text-slate-800 mb-2">Hapus Berkas?</h3>
+             <p className="text-slate-500 text-[10px] mb-8 font-medium italic">{deleteConfirm.docLabel}</p>
+             <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-400 rounded-xl font-black text-[10px] uppercase">Batal</button>
+                <button onClick={handleDeleteDocument} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg">Hapus</button>
              </div>
           </div>
         </div>
@@ -248,21 +221,31 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   );
 };
 
+const MiniDoc = ({ label, status, onOpen }: { label: string, status: boolean, onOpen: () => void }) => (
+  <button 
+    onClick={status ? onOpen : undefined}
+    className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${status ? 'bg-emerald-50 border-emerald-100 text-emerald-600 active:scale-95' : 'bg-slate-50 border-slate-100 text-slate-300'}`}
+  >
+     {status ? <FileCheck size={14} /> : <FileX size={14} />}
+     <span className="text-[7px] font-black uppercase tracking-widest">{label}</span>
+  </button>
+);
+
 const DocItem = ({ label, status, icon: Icon, onOpen, onDelete }: { label: string, status: boolean, icon: any, onOpen: () => void, onDelete: () => void }) => (
   <div className={`p-6 rounded-[2rem] border-2 transition-all group/item hover:border-blue-200 hover:bg-white ${status ? 'border-emerald-50 bg-emerald-50/20' : 'border-slate-50 bg-slate-50/30'}`}>
     <div className="flex items-center justify-between mb-4">
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${status ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-200 text-slate-400'}`}><Icon size={24} /></div>
       {status ? (
         <div className="flex gap-1">
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all" title="Hapus Berkas"><Trash2 size={16} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all"><Trash2 size={16} /></button>
           <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><FileCheck size={16} /></div>
         </div>
       ) : <div className="p-1.5 bg-slate-100 text-slate-300 rounded-lg"><FileX size={16} /></div>}
     </div>
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{label}</p>
+    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
     <div className="flex items-center justify-between mt-2">
-       <p className={`text-xs font-black ${status ? 'text-emerald-700' : 'text-slate-400'}`}>{status ? 'VERIFIKASI OK' : 'BELUM ADA'}</p>
-       {status && <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-slate-900 transition-all shadow-md flex items-center gap-1.5 active:scale-90"><Maximize2 size={14} /><span className="text-[9px] font-black uppercase">Buka</span></button>}
+       <p className={`text-xs font-black ${status ? 'text-emerald-700' : 'text-slate-400'}`}>{status ? 'OK' : '-'}</p>
+       {status && <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-slate-900 transition-all flex items-center gap-1.5 active:scale-90"><Maximize2 size={12} /><span className="text-[9px] font-black uppercase">Buka</span></button>}
     </div>
   </div>
 );
