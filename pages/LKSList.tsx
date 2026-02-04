@@ -7,7 +7,7 @@ import {
   Navigation, FileCheck, AlertTriangle, PlusCircle, FileBarChart,
   Map as MapIcon, Landmark, Briefcase, Calendar, Phone, CheckCircle2,
   HelpCircle, Loader2, DollarSign, FileType, Activity, Compass, ExternalLink,
-  Upload
+  Upload, List, Type, PenLine
 } from 'lucide-react';
 import { LKS, LKSDocuments, BantuanLKS } from '../types';
 import { KECAMATAN_BLORA, JENIS_BANTUAN_LIST } from '../constants';
@@ -82,6 +82,30 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
       current[keys[keys.length - 1]] = value;
       return newData;
     });
+  };
+
+  const addRiwayatBantuan = () => {
+    if (!selectedLks) return;
+    const newBantuan: BantuanLKS = {
+      id: Math.random().toString(36).substr(2, 9),
+      tahun: new Date().getFullYear().toString(),
+      jenis: '',
+      sumber: '',
+      nominal: 0,
+      keterangan: ''
+    };
+    handleChange('riwayatBantuan', [...(selectedLks.riwayatBantuan || []), newBantuan]);
+  };
+
+  const updateRiwayatBantuan = (id: string, field: keyof BantuanLKS, value: any) => {
+    if (!selectedLks) return;
+    const updated = selectedLks.riwayatBantuan.map(b => b.id === id ? { ...b, [field]: value } : b);
+    handleChange('riwayatBantuan', updated);
+  };
+
+  const removeRiwayatBantuan = (id: string) => {
+    if (!selectedLks) return;
+    handleChange('riwayatBantuan', selectedLks.riwayatBantuan.filter(b => b.id !== id));
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof LKSDocuments) => {
@@ -181,9 +205,8 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const formatRupiah = (val: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
   };
 
   return (
@@ -321,7 +344,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 lg:p-12 space-y-10 lg:space-y-16 pb-24 no-scrollbar">
-              {/* Form sections stay mostly the same but with responsive grid spacing */}
+              {/* Seksi I: Identitas & Domisili */}
               <section className="space-y-6">
                 <h4 className="text-[10px] lg:text-sm font-black text-blue-600 uppercase flex items-center gap-2 border-b-2 border-blue-100 pb-2"><Info size={16} /> I. Identitas & Domisili</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
@@ -333,7 +356,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
                 </div>
               </section>
 
-              {/* Sections: Pengurus, Legalitas, etc. same as original but with responsive class adaptations */}
+              {/* Seksi II: Pengurus */}
               <section className="space-y-6">
                 <h4 className="text-[10px] lg:text-sm font-black text-indigo-600 uppercase flex items-center gap-2 border-b-2 border-indigo-100 pb-2"><Users size={16} /> II. Pengurus</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8">
@@ -347,23 +370,83 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
                 </div>
               </section>
 
+              {/* Seksi III: Legalitas & Akreditasi */}
               <section className="space-y-6">
-                <h4 className="text-[10px] lg:text-sm font-black text-emerald-600 uppercase flex items-center gap-2 border-b-2 border-emerald-100 pb-2"><ShieldCheck size={16} /> III. Legalitas</h4>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">SK Kemenkumham</label><input type="text" value={selectedLks.nomorSKKemenkumham} onChange={e => handleChange('nomorSKKemenkumham', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
-                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Tanda Daftar</label><input type="text" value={selectedLks.nomorTandaDaftar} onChange={e => handleChange('nomorTandaDaftar', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
+                <h4 className="text-[10px] lg:text-sm font-black text-emerald-600 uppercase flex items-center gap-2 border-b-2 border-emerald-100 pb-2"><ShieldCheck size={16} /> III. Legalitas, Klasifikasi & Akreditasi</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Nama Yayasan (Kemenkumham)</label><input type="text" value={selectedLks.namaKemenkumham} onChange={e => handleChange('namaKemenkumham', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Nomor SK Kemenkumham</label><input type="text" value={selectedLks.nomorSKKemenkumham} onChange={e => handleChange('nomorSKKemenkumham', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">NPWP Lembaga</label><input type="text" value={selectedLks.npwp} onChange={e => handleChange('npwp', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Tanda Daftar LKS (Dinsos)</label><input type="text" value={selectedLks.nomorTandaDaftar} onChange={e => handleChange('nomorTandaDaftar', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" /></div>
                   <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Berlaku S/D</label><input type="date" value={selectedLks.masaBerlakuTandaDaftar} onChange={e => handleChange('masaBerlakuTandaDaftar', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold text-red-600" /></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Posisi LKS</label><select value={selectedLks.posisiLKS} onChange={e => handleChange('posisiLKS', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold"><option value="Pusat">Pusat</option><option value="Cabang">Cabang</option></select></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Lingkup Kerja</label><select value={selectedLks.lingkupKerja} onChange={e => handleChange('lingkupKerja', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold"><option value="Kabupaten">Kabupaten</option><option value="Provinsi">Provinsi</option><option value="Nasional">Nasional</option></select></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Akreditasi</label><select value={selectedLks.statusAkreditasi} onChange={e => handleChange('statusAkreditasi', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold"><option value="Belum">Belum Terakreditasi</option><option value="A">Grade A</option><option value="B">Grade B</option><option value="C">Grade C</option></select></div>
+                  <div className="space-y-1"><label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase ml-1">Tahun Akreditasi</label><input type="text" value={selectedLks.tahunAkreditasi} onChange={e => handleChange('tahunAkreditasi', e.target.value)} className="w-full px-4 lg:px-5 py-3 lg:py-4 bg-slate-50 border rounded-xl lg:rounded-2xl text-xs font-bold" placeholder="Contoh: 2023" /></div>
+                </div>
+              </section>
+
+              {/* Seksi IV: Riwayat Bantuan */}
+              <section className="space-y-6">
+                <div className="flex items-center justify-between border-b-2 border-amber-100 pb-2">
+                   <h4 className="text-[10px] lg:text-sm font-black text-amber-600 uppercase flex items-center gap-2"><DollarSign size={16} /> IV. Riwayat Bantuan</h4>
+                   <button onClick={addRiwayatBantuan} className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"><Plus size={14} /> Tambah Data</button>
+                </div>
+                <div className="bg-slate-50 rounded-[2rem] border border-slate-100 overflow-hidden shadow-inner">
+                   <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                         <thead className="bg-slate-200 text-slate-600">
+                            <tr>
+                               <th className="px-4 py-3 font-black uppercase">Tahun</th>
+                               <th className="px-4 py-3 font-black uppercase">Jenis</th>
+                               <th className="px-4 py-3 font-black uppercase">Sumber</th>
+                               <th className="px-4 py-3 font-black uppercase">Nominal (Rp)</th>
+                               <th className="px-4 py-3 font-black uppercase">Keterangan</th>
+                               <th className="px-4 py-3"></th>
+                            </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-100">
+                            {selectedLks.riwayatBantuan?.map((b) => (
+                               <tr key={b.id}>
+                                  <td className="px-2 py-2"><input type="text" value={b.tahun} onChange={e => updateRiwayatBantuan(b.id, 'tahun', e.target.value)} className="w-16 p-2 bg-white border rounded-lg text-[10px] font-bold" /></td>
+                                  <td className="px-2 py-2"><input type="text" value={b.jenis} onChange={e => updateRiwayatBantuan(b.id, 'jenis', e.target.value)} className="w-full p-2 bg-white border rounded-lg text-[10px] font-bold" placeholder="Jenis Bantuan" /></td>
+                                  <td className="px-2 py-2"><input type="text" value={b.sumber} onChange={e => updateRiwayatBantuan(b.id, 'sumber', e.target.value)} className="w-full p-2 bg-white border rounded-lg text-[10px] font-bold" placeholder="Contoh: APBD" /></td>
+                                  <td className="px-2 py-2"><input type="number" value={b.nominal} onChange={e => updateRiwayatBantuan(b.id, 'nominal', parseInt(e.target.value) || 0)} className="w-24 p-2 bg-white border rounded-lg text-[10px] font-bold" /></td>
+                                  <td className="px-2 py-2"><input type="text" value={b.keterangan} onChange={e => updateRiwayatBantuan(b.id, 'keterangan', e.target.value)} className="w-full p-2 bg-white border rounded-lg text-[10px]" /></td>
+                                  <td className="px-2 py-2 text-right"><button onClick={() => removeRiwayatBantuan(b.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={16}/></button></td>
+                               </tr>
+                            ))}
+                            {(!selectedLks.riwayatBantuan || selectedLks.riwayatBantuan.length === 0) && (
+                               <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400 italic font-medium">Belum ada riwayat bantuan tercatat.</td></tr>
+                            )}
+                         </tbody>
+                      </table>
+                   </div>
+                </div>
+              </section>
+
+              {/* Seksi V: Kegiatan Sosial */}
+              <section className="space-y-6">
+                <h4 className="text-[10px] lg:text-sm font-black text-slate-800 uppercase flex items-center gap-2 border-b-2 border-slate-100 pb-2"><PenLine size={16} /> V. Deskripsi Kegiatan Sosial</h4>
+                <div className="space-y-1">
+                   <label className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fokus & Aktivitas Utama Lembaga</label>
+                   <textarea 
+                     value={selectedLks.kegiatanSosial} 
+                     onChange={e => handleChange('kegiatanSosial', e.target.value)}
+                     className="w-full h-40 px-6 py-5 bg-slate-50 border rounded-[1.5rem] lg:rounded-[2.5rem] text-sm leading-relaxed font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
+                     placeholder="Tuliskan detail kegiatan rutin, program unggulan, dan fokus pelayanan sosial lembaga di sini..."
+                   ></textarea>
                 </div>
               </section>
 
               <section className="space-y-6">
-                 <h4 className="text-[10px] lg:text-sm font-black text-slate-800 uppercase flex items-center gap-2 border-b-2 border-slate-100 pb-2"><Upload size={16} /> IV. Dokumen Administrasi</h4>
+                 <h4 className="text-[10px] lg:text-sm font-black text-slate-800 uppercase flex items-center gap-2 border-b-2 border-slate-100 pb-2"><Upload size={16} /> VI. Dokumen Administrasi (PDF)</h4>
                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
                     {[
-                      { key: 'ktpKetua', label: 'KTP' },
-                      { key: 'skKemenkumham', label: 'SK' },
-                      { key: 'tandaDaftar', label: 'Daftar' },
-                      { key: 'sertifikatAkreditasi', label: 'Akreditasi' }
+                      { key: 'ktpKetua', label: 'KTP Ketua' },
+                      { key: 'skKemenkumham', label: 'SK Kemenkumham' },
+                      { key: 'tandaDaftar', label: 'Tanda Daftar' },
+                      { key: 'sertifikatAkreditasi', label: 'Sertifikat Akred' }
                     ].map(doc => (
                       <div key={doc.key} className="p-4 lg:p-8 border-2 border-dashed rounded-2xl lg:rounded-[2.5rem] bg-slate-50/50 flex flex-col items-center text-center gap-3 relative group">
                          <div className={`w-10 h-10 lg:w-16 lg:h-16 rounded-xl lg:rounded-2xl flex items-center justify-center ${selectedLks.dokumen[doc.key as keyof LKSDocuments] ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-200 text-slate-400'}`}>
@@ -384,7 +467,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
                    <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-600 rounded-xl shadow-lg"><MapIcon size={20} /></div>
                       <div>
-                         <h4 className="text-[10px] lg:text-sm font-black uppercase tracking-widest">V. Titik Koordinat Lokasi</h4>
+                         <h4 className="text-[10px] lg:text-sm font-black uppercase tracking-widest">VII. Titik Koordinat Lokasi</h4>
                       </div>
                    </div>
                    <div className="flex items-center gap-3 text-[8px] lg:text-[10px] font-black tracking-widest border border-slate-700 px-4 py-2.5 rounded-xl bg-slate-800">
@@ -436,13 +519,47 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
                       <p className="text-[8pt] lg:text-[11pt] font-bold arial-force uppercase">Status: {reportLks.statusAktif}</p>
                    </div>
                    <div className="space-y-4 arial-force">
-                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-xs lg:text-sm arial-force bg-slate-100 py-1">IDENTITAS</p>
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-xs lg:text-sm arial-force bg-slate-100 py-1">I. IDENTITAS LEMBAGA</p>
                       <table className="w-full text-[9pt] lg:text-[11pt] arial-force">
                          <tbody>
                             <tr className="arial-force"><td className="w-32 lg:w-48 font-bold arial-force py-1">Nama Lembaga</td><td className="w-4 arial-force">:</td><td className="arial-force font-black py-1">{reportLks.nama}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force py-1">Yayasan</td><td className="arial-force">:</td><td className="arial-force py-1">{reportLks.namaKemenkumham}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force py-1">NPWP</td><td className="arial-force">:</td><td className="arial-force py-1">{reportLks.npwp}</td></tr>
                             <tr className="arial-force"><td className="font-bold arial-force py-1">Alamat</td><td className="arial-force">:</td><td className="arial-force py-1">{reportLks.alamat}, {reportLks.desa}, Kec. {reportLks.kecamatan}</td></tr>
+                            <tr className="arial-force"><td className="font-bold arial-force py-1">Status Akreditasi</td><td className="arial-force">:</td><td className="arial-force font-bold py-1">{reportLks.statusAkreditasi} ({reportLks.tahunAkreditasi || '-'})</td></tr>
                          </tbody>
                       </table>
+                   </div>
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-xs lg:text-sm arial-force bg-slate-100 py-1">II. RIWAYAT BANTUAN</p>
+                      {reportLks.riwayatBantuan && reportLks.riwayatBantuan.length > 0 ? (
+                        <table className="w-full text-[8pt] lg:text-[10pt] border-collapse border border-slate-300 arial-force">
+                          <thead>
+                            <tr className="bg-slate-50">
+                              <th className="border border-slate-300 p-2">Tahun</th>
+                              <th className="border border-slate-300 p-2">Sumber</th>
+                              <th className="border border-slate-300 p-2">Nominal</th>
+                              <th className="border border-slate-300 p-2">Keterangan</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportLks.riwayatBantuan.map(b => (
+                              <tr key={b.id}>
+                                <td className="border border-slate-300 p-2 text-center">{b.tahun}</td>
+                                <td className="border border-slate-300 p-2">{b.sumber}</td>
+                                <td className="border border-slate-300 p-2 font-bold">{formatRupiah(b.nominal)}</td>
+                                <td className="border border-slate-300 p-2">{b.keterangan}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : <p className="text-[9pt] italic text-slate-400">Belum ada riwayat bantuan.</p>}
+                   </div>
+                   <div className="space-y-4 arial-force">
+                      <p className="font-bold border-l-4 border-black pl-3 uppercase text-xs lg:text-sm arial-force bg-slate-100 py-1">III. KEGIATAN SOSIAL</p>
+                      <p className="text-[9pt] lg:text-[11pt] text-justify leading-relaxed arial-force">
+                        {reportLks.kegiatanSosial || 'Informasi kegiatan belum diisi.'}
+                      </p>
                    </div>
                 </div>
              </div>
