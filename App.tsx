@@ -12,8 +12,8 @@ import { MOCK_LKS, MOCK_PM, MOCK_USERS } from './constants';
 import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './types';
 
 // Firebase Imports
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, Firestore } from 'firebase/firestore';
 
 type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'rekomendasi' | 'profile';
 
@@ -70,11 +70,11 @@ const App: React.FC = () => {
   });
 
   // Cloud Sync State
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
-  const lastWriteTime = useRef<number>(0);
-  const isSyncLocked = useRef<boolean>(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'connected'>('idle');
+  const isRemoteUpdate = useRef<boolean>(false);
+  const syncTimeoutRef = useRef<any>(null);
 
-  // Persistence to LocalStorage
+  // 1. Persistence to LocalStorage (Always)
   useEffect(() => {
     localStorage.setItem('si-lks-appname', appName);
     localStorage.setItem('si-lks-applogo', appLogo || '');
@@ -88,8 +88,92 @@ const App: React.FC = () => {
     if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
   }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig, notifications]);
 
-  // Firebase Logic omitted for brevity as it follows the same pattern as before, 
-  // ensuring notifications are added on significant actions.
+  // 2. Firebase Real-time Synchronization Logic
+  useEffect(() => {
+    if (!cloudConfig?.apiKey || !cloudConfig?.projectId) {
+      setSyncStatus('idle');
+      return;
+    }
+
+    let firebaseApp: FirebaseApp;
+    let db: Firestore;
+
+    try {
+      const firebaseConfig = {
+        apiKey: cloudConfig.apiKey,
+        authDomain: `${cloudConfig.projectId}.firebaseapp.com`,
+        projectId: cloudConfig.projectId,
+        storageBucket: `${cloudConfig.projectId}.appspot.com`,
+      };
+
+      firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      db = getFirestore(firebaseApp);
+      setSyncStatus('connected');
+
+      // Listen for remote changes
+      const docRef = doc(db, 'projects', cloudConfig.projectId);
+      const unsubscribe = onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const cloudData = snapshot.data();
+          isRemoteUpdate.current = true;
+          
+          if (cloudData.lksData) setLksData(cloudData.lksData);
+          if (cloudData.pmData) setPmData(cloudData.pmData);
+          if (cloudData.lettersData) setLettersData(cloudData.lettersData);
+          if (cloudData.allUsers) setAllUsers(cloudData.allUsers);
+          if (cloudData.notifications) {
+            setNotifications(cloudData.notifications.map((n: any) => ({ ...n, time: new Date(n.time) })));
+          }
+          if (cloudData.appName) setAppName(cloudData.appName);
+          if (cloudData.appLogo) setAppLogo(cloudData.appLogo);
+
+          setTimeout(() => { isRemoteUpdate.current = false; }, 500);
+        }
+      }, (err) => {
+        console.error("Firebase Snapshot Error:", err);
+        setSyncStatus('error');
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("Firebase Init Error:", err);
+      setSyncStatus('error');
+    }
+  }, [cloudConfig]);
+
+  // 3. Push Local Changes to Cloud (Debounced)
+  useEffect(() => {
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        const db = getFirestore();
+        const docRef = doc(db, 'projects', cloudConfig.projectId);
+        
+        await setDoc(docRef, {
+          lksData,
+          pmData,
+          lettersData,
+          allUsers,
+          notifications: notifications.map(n => ({ ...n, time: n.time.toISOString() })),
+          appName,
+          appLogo,
+          lastUpdated: new Date().toISOString(),
+          updatedBy: currentUser?.nama || 'System'
+        }, { merge: true });
+
+        setSyncStatus('connected');
+      } catch (err) {
+        console.error("Push to Cloud Error:", err);
+        setSyncStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(syncTimeoutRef.current);
+  }, [lksData, pmData, lettersData, allUsers, notifications, appName, appLogo]);
 
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
@@ -195,7 +279,12 @@ const App: React.FC = () => {
             <div>
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activePage.toUpperCase()}</h2>
               <div className="flex items-center gap-4 mt-1">
-                <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div><p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Sistem Aktif</p></div>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${syncStatus === 'connected' ? 'bg-emerald-500' : syncStatus === 'error' ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                    {syncStatus === 'connected' ? 'Cloud Connected' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync Error' : 'Local Mode'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -231,6 +320,12 @@ const App: React.FC = () => {
                   </div>
                 )}
              </div>
+
+             {/* Cloud Sync Icon */}
+             <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl">
+               {syncStatus === 'connected' ? <Cloud size={20} className="text-blue-500" /> : syncStatus === 'syncing' ? <RefreshCw size={20} className="text-blue-500 animate-spin" /> : <CloudOff size={20} />}
+             </div>
+
              <button onClick={() => { setActivePage('profile'); setNavContext(null); }} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent hover:border-slate-100 group">
                 <div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm group-hover:scale-110 transition-transform">
                    {currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}
