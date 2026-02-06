@@ -5,7 +5,7 @@ import {
   Printer, ArrowLeft, Upload, FileSpreadsheet, Download, 
   Info, AlertCircle, CheckCircle2, X, Plus, Loader2, 
   UserPlus, Calendar, Home, Globe, Hash, Landmark, Save, Edit3,
-  FileText, Filter, CheckCircle
+  FileText, Filter, CheckCircle, Building2, FileOutput, FileInput, AlertTriangle
 } from 'lucide-react';
 import { LKS, PenerimaManfaat as PMType, PMKategori } from '../types';
 import { KECAMATAN_BLORA } from '../constants';
@@ -22,11 +22,13 @@ interface PenerimaManfaatPageProps {
 
 const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmData, setPmData, initialSelectedPmId, onNotify }) => {
   const [selectedLksId, setSelectedLksId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // Untuk cari PM
+  const [searchTermLks, setSearchTermLks] = useState(''); // Untuk cari LKS di halaman utama
   const [categoryFilter, setCategoryFilter] = useState<'Semua' | PMKategori>('Semua');
   const [isImporting, setIsImporting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [deleteConfirmPm, setDeleteConfirmPm] = useState<PMType | null>(null);
   
   // States for Download Modal
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
@@ -54,6 +56,22 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     keterangan: ''
   });
 
+  // Effect: Auto-calculate Age based on Birth Date (Form Manual)
+  useEffect(() => {
+    if (formData.tanggalLahir) {
+      const birthDate = new Date(formData.tanggalLahir);
+      const today = new Date();
+      if (!isNaN(birthDate.getTime())) {
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        setFormData(prev => ({ ...prev, umur: age < 0 ? 0 : age }));
+      }
+    }
+  }, [formData.tanggalLahir]);
+
   // Shortcut Handler: Auto-filter PM from Dashboard
   useEffect(() => {
     if (initialSelectedPmId) {
@@ -67,7 +85,15 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
 
   const selectedLks = lksData.find(l => l.id === selectedLksId);
 
-  // Filter LKS for dropdown search
+  // Filter LKS for main selection page
+  const filteredLksSelection = useMemo(() => {
+    return lksData.filter(l => 
+      l.nama.toLowerCase().includes(searchTermLks.toLowerCase()) ||
+      l.kecamatan.toLowerCase().includes(searchTermLks.toLowerCase())
+    );
+  }, [lksData, searchTermLks]);
+
+  // Filter LKS for dropdown search (Modal Tambah)
   const filteredLksOptions = useMemo(() => {
     return lksData.filter(l => l.nama.toLowerCase().includes(lksSearchTerm.toLowerCase()));
   }, [lksData, lksSearchTerm]);
@@ -87,7 +113,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       const matchesCat = downloadCategory === 'Semua' || p.kategori === downloadCategory;
       return matchesLks && matchesCat;
     }).sort((a, b) => {
-        // Sort by LKS Name then PM Name
         const lksA = lksData.find(l => l.id === a.lksId)?.nama || '';
         const lksB = lksData.find(l => l.id === b.lksId)?.nama || '';
         if (lksA !== lksB) return lksA.localeCompare(lksB);
@@ -110,7 +135,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     }
 
     if (formData.id) {
-      // Edit Mode
       setPmData(prev => prev.map(p => p.id === formData.id ? { 
         ...p, 
         ...(formData as PMType),
@@ -118,7 +142,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       } : p));
       if (onNotify) onNotify('Mengupdate PM', formData.nama || 'Data PM');
     } else {
-      // Create Mode
       const pmToAdd: PMType = {
         id: Math.random().toString(36).substr(2, 9),
         ...(formData as PMType),
@@ -133,10 +156,11 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     resetForm();
   };
 
-  const handleDeletePm = (pm: PMType) => {
-    if(confirm(`Hapus data ${pm.nama}?`)) {
-      setPmData(prev => prev.filter(p => p.id !== pm.id));
-      if (onNotify) onNotify('Menghapus PM', pm.nama);
+  const handleConfirmDelete = () => {
+    if (deleteConfirmPm) {
+      setPmData(prev => prev.filter(p => p.id !== deleteConfirmPm.id));
+      if (onNotify) onNotify('Menghapus PM', deleteConfirmPm.nama);
+      setDeleteConfirmPm(null);
     }
   };
 
@@ -148,6 +172,28 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     });
     setLksSearchTerm('');
     setShowLksDropdown(false);
+  };
+
+  const handleExportCSVPM = () => {
+    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir (YYYY-MM-DD)", "Umur", "JK (L/P)", "KabKota", "Kecamatan", "Desa", "Kategori (Dalam/Luar)"];
+    const rows = pmData.map(p => {
+      const lks = lksData.find(l => l.id === p.lksId)?.nama || '-';
+      return [
+        `"${p.nama}"`, `"${lks}"`, `"${p.nik}"`, `"${p.noKK || ''}"`,
+        `"${p.tempatLahir || ''}"`, `"${p.tanggalLahir || ''}"`, `"${p.umur || ''}"`,
+        `"${p.jenisKelamin}"`, `"${p.asalKabKota || ''}"`, `"${p.asalKecamatan || ''}"`,
+        `"${p.asalDesa || ''}"`, `"${p.kategori}"`
+      ];
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Data_PM_Blora_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (onNotify) onNotify('Export CSV', 'Data PM Berhasil');
   };
 
   const handleDownloadBNBAPDF = async () => {
@@ -179,48 +225,147 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     }
   };
 
+  // Helper untuk normalisasi tanggal ke format YYYY-MM-DD
+  const parseDateString = (dateStr: string): string => {
+    if (!dateStr) return '';
+    
+    // Jika format DD/MM/YYYY
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        // Asumsi DD/MM/YYYY
+        if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        // Asumsi YYYY/MM/DD
+        if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+    }
+    
+    // Jika sudah format YYYY-MM-DD atau mendekati
+    const dateObj = new Date(dateStr);
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toISOString().split('T')[0];
+    }
+    
+    return dateStr; // Kembalikan apa adanya jika gagal parsing
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-6">
       {/* Header Utama PM */}
-      <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="bg-slate-900 rounded-[2.5rem] lg:rounded-[3rem] p-6 lg:p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 no-print">
         <div className="relative z-10">
-          <h2 className="text-3xl font-black mb-3">Manajemen Warga Binaan (PM)</h2>
-          <p className="text-slate-400 max-w-xl text-lg font-medium">Data Terpadu Penerima Manfaat Berdasarkan Lembaga Kesejahteraan Sosial.</p>
+          <h2 className="text-xl lg:text-3xl font-black mb-1 lg:mb-3 uppercase tracking-tighter">Warga Binaan (PM)</h2>
+          <p className="text-slate-400 max-w-xl text-[10px] lg:text-sm font-bold uppercase tracking-widest">Pendataan Terpadu By Name By Address.</p>
         </div>
-        <div className="flex flex-wrap gap-3 relative z-10 justify-center">
-          <button onClick={() => setIsDownloadModalOpen(true)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2">
-            <Download size={20} /> DOWNLOAD BNBA PM
+        <div className="flex flex-wrap gap-2 lg:gap-3 relative z-10 justify-center">
+          <button onClick={handleExportCSVPM} className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-2">
+            <FileOutput size={16} /> EXPORT CSV
           </button>
-          <button onClick={() => { resetForm(); setIsAdding(true); }} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl active:scale-95 transition-all flex items-center gap-2">
-            <Plus size={20} /> TAMBAH PM
+          <button onClick={() => setIsImporting(true)} className="bg-indigo-50 text-indigo-600 border border-indigo-100 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-2">
+            <FileInput size={16} /> IMPORT CSV
           </button>
-          <button onClick={() => setIsImporting(true)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2">
-            <Upload size={20} /> IMPORT CSV
+          <button onClick={() => setIsDownloadModalOpen(true)} className="bg-white text-slate-900 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2">
+            <Download size={18} /> BNBA PDF
+          </button>
+          <button onClick={() => { resetForm(); setIsAdding(true); }} className="bg-blue-600 text-white px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2">
+            <Plus size={18} /> TAMBAH PM
           </button>
         </div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full -mr-32 -mt-32"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full -mr-32 -mt-32"></div>
       </div>
 
       {!selectedLksId ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lksData.map(lks => (
-            <button key={lks.id} onClick={() => setSelectedLksId(lks.id)} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all text-left group">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner"><User size={28} /></div>
-                <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-600" />
-              </div>
-              <h3 className="font-black text-slate-800 text-xl mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">{lks.nama}</h3>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold uppercase tracking-widest"><MapPin size={14} className="text-blue-500" /> {lks.kecamatan}</div>
-              <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                 <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{pmData.filter(p => p.lksId === lks.id).length} Orang PM</p>
-                 <span className="text-[9px] font-black px-3 py-1 bg-slate-100 text-slate-400 rounded-lg">DETAIL</span>
-              </div>
-            </button>
-          ))}
+        <div className="space-y-6">
+          {/* SEARCH LKS PADA HALAMAN UTAMA */}
+          <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4">
+            <div className="flex-1 relative w-full">
+               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+               <input 
+                  type="text" 
+                  placeholder="Cari Nama Lembaga (LKS) atau Wilayah..." 
+                  className="w-full pl-14 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm" 
+                  value={searchTermLks} 
+                  onChange={(e) => setSearchTermLks(e.target.value)} 
+               />
+            </div>
+            <div className="px-6 py-2 hidden lg:flex items-center gap-2 bg-blue-50 text-blue-600 rounded-2xl font-black text-[10px] uppercase">
+               <Building2 size={16} /> Pilih Lembaga untuk melihat Daftar PM
+            </div>
+          </div>
+
+          {/* TAMPILAN MOBILE: Card View */}
+          <div className="lg:hidden grid grid-cols-1 gap-4">
+            {filteredLksSelection.map(lks => (
+              <button key={lks.id} onClick={() => setSelectedLksId(lks.id)} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-left group active:scale-95 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner"><User size={24} /></div>
+                  <ChevronRight size={18} className="text-slate-300" />
+                </div>
+                <h3 className="font-black text-slate-800 text-lg mb-1 line-clamp-1">{lks.nama}</h3>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest"><MapPin size={12} className="text-blue-500" /> {lks.kecamatan}</div>
+                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                   <p className="text-[9px] font-black text-slate-800 uppercase">{pmData.filter(p => p.lksId === lks.id).length} PM Terdaftar</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* TAMPILAN DESKTOP: Tabel View LKS */}
+          <div className="hidden lg:block bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-900 text-white">
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Nama Lembaga (LKS)</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Wilayah / Kecamatan</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-center text-slate-400">Total PM</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-right text-slate-400">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredLksSelection.map((lks) => (
+                  <tr 
+                    key={lks.id} 
+                    onClick={() => setSelectedLksId(lks.id)}
+                    className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                  >
+                    <td className="px-10 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                          <Building2 size={20} />
+                        </div>
+                        <p className="font-black text-slate-800 text-sm uppercase tracking-tight">{lks.nama}</p>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <MapPin size={14} className="text-blue-500" /> {lks.kecamatan}
+                      </p>
+                    </td>
+                    <td className="px-10 py-6 text-center">
+                      <span className="px-4 py-2 bg-slate-100 rounded-xl text-xs font-black text-slate-700">
+                        {pmData.filter(p => p.lksId === lks.id).length} PM
+                      </span>
+                    </td>
+                    <td className="px-10 py-6 text-right">
+                       <div className="flex items-center justify-end text-blue-600 font-black text-[10px] uppercase tracking-widest gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          Lihat Daftar <ChevronRight size={16} />
+                       </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredLksSelection.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-10 py-20 text-center text-slate-300 italic font-medium">Data lembaga tidak ditemukan.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Header View PM per LKS */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
             <div className="flex items-center gap-4">
               <button onClick={() => { setSelectedLksId(null); setSearchTerm(''); }} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
                 <ArrowLeft size={20} />
@@ -244,28 +389,28 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                   setDownloadLksId(selectedLksId);
                   setIsDownloadModalOpen(true);
                 }} 
-                className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl hover:bg-black shadow-xl shadow-slate-900/20 active:scale-95 transition-all"
+                className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl hover:bg-black shadow-xl shadow-slate-900/20 active:scale-95 transition-all font-black text-xs tracking-widest"
               >
                 <Printer size={18} /> CETAK PDF
               </button>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4">
+          <div className="bg-white p-4 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-4 no-print">
             <div className="flex-1 relative w-full">
                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-               <input type="text" placeholder="Cari Nama atau NIK..." className="w-full pl-14 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+               <input type="text" placeholder="Cari Nama atau NIK PM..." className="w-full pl-14 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex gap-2 p-1 bg-slate-50 border rounded-2xl">
                {['Semua', 'Dalam', 'Luar'].map(f => (
                  <button key={f} onClick={() => setCategoryFilter(f as any)} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${categoryFilter === f ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                   {f === 'Semua' ? 'SEMUA' : f === 'Dalam' ? 'DALAM PANTI' : 'LUAR PANTI'}
+                   {f === 'Semua' ? 'SEMUA' : f === 'Dalam' ? 'DALAM' : 'LUAR'}
                  </button>
                ))}
             </div>
           </div>
 
-          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden">
+          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden no-print">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-slate-900 text-white">
@@ -299,7 +444,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                           <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                             <Edit3 size={18} />
                           </button>
-                          <button onClick={() => handleDeletePm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all">
+                          <button onClick={() => setDeleteConfirmPm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all">
                             <Trash2 size={18} />
                           </button>
                         </div>
@@ -312,6 +457,24 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS PM */}
+      {deleteConfirmPm && (
+        <div className="fixed inset-0 z-[800] flex items-center justify-center p-4 no-print">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmPm(null)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center shadow-2xl animate-in zoom-in-95">
+             <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={36} /></div>
+             <h3 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Hapus Warga Binaan?</h3>
+             <p className="text-slate-500 text-xs mb-8 leading-relaxed font-bold uppercase tracking-widest">
+                Anda akan menghapus data <span className="text-red-600">{deleteConfirmPm.nama}</span> secara permanen dari basis data BNBA.
+             </p>
+             <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirmPm(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+                <button onClick={handleConfirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-600/30 active:scale-95 transition-all">HAPUS PERMANEN</button>
+             </div>
           </div>
         </div>
       )}
@@ -364,7 +527,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                    </div>
                    <p className="text-[9px] text-slate-500 font-bold uppercase leading-relaxed">
                       Laporan akan mencakup <span className="text-blue-600">{pmToDownload.length} data PM</span> terdaftar. 
-                      Format PDF berorientasi Landscape (Mendatar) untuk kolom yang lebih luas.
+                      Format PDF berorientasi Landscape (Mendatar).
                    </p>
                 </div>
 
@@ -383,9 +546,9 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         </div>
       )}
 
-      {/* MODAL TAMBAH/EDIT PM */}
+      {/* MODAL TAMBAH/EDIT PM - Tetap mengunci indikator */}
       {isAdding && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 no-print">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsAdding(false)}></div>
           <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95">
             <div className="px-10 py-8 border-b flex items-center justify-between bg-white sticky top-0 z-10">
@@ -479,8 +642,8 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                     <input type="date" value={formData.tanggalLahir} onChange={e => setFormData({...formData, tanggalLahir: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-800" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Umur (Tahun)</label>
-                    <input type="number" value={formData.umur} onChange={e => setFormData({...formData, umur: parseInt(e.target.value) || 0})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-800" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Umur (Tahun) — <span className="text-blue-500 italic">Otomatis</span></label>
+                    <input type="number" value={formData.umur} readOnly className="w-full px-5 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl outline-none font-bold text-slate-500 cursor-not-allowed" />
                   </div>
                   <div className="md:col-span-3 space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Jenis Kelamin</label>
@@ -548,125 +711,152 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       )}
 
       {isImporting && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 no-print">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsImporting(false)}></div>
           <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95">
-             <div className="w-20 h-20 mx-auto bg-blue-50 text-blue-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><Upload size={36} /></div>
-             <h3 className="text-2xl font-black text-slate-800 mb-2">Import Data BNBA</h3>
-             <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Gunakan template CSV standar untuk mengunggah data PM dalam jumlah banyak.</p>
-             <div className="space-y-3">
-                <button onClick={() => {
-                   const headers = "NAMA,PANTI,NIK,NO KK,TEMPAT LAHIR,TANGGAL LAHIR,UMUR,JENIS KELAMIN,ASAL KAB/KOTA,ASAL KECAMATAN,ASAL DESA,STATUS KEBERADAAN";
-                   const example = "\nBudi Santoso,LKS Bina Sejahtera Blora,3316010101010001,3316010101010002,Blora,1990-05-12,34,L,Blora,Blora,Tempelan,Dalam Panti";
-                   const blob = new Blob([headers + example], { type: 'text/csv;charset=utf-8;' });
-                   const link = document.createElement("a");
-                   link.href = URL.createObjectURL(blob);
-                   link.setAttribute("download", "template_bnba_blora.csv");
-                   link.click();
-                }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-black text-[10px] uppercase tracking-widest hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2 mb-4">
-                   <Download size={18} /> UNDUH TEMPLATE CSV
-                </button>
-                <div className="flex gap-2">
-                   <button onClick={() => setIsImporting(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
-                   <label className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg cursor-pointer flex items-center justify-center gap-2">
-                      <FileSpreadsheet size={18} /> PILIH FILE
-                      <input type="file" accept=".csv" className="hidden" onChange={(e) => {
-                         const file = e.target.files?.[0];
-                         if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                               const text = event.target?.result as string;
-                               const lines = text.split('\n');
-                               const newEntries: PMType[] = [];
-                               for (let i = 1; i < lines.length; i++) {
-                                  const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-                                  if (cols.length < 2) continue;
-                                  const targetLks = lksData.find(l => l.nama.toLowerCase().includes(cols[1].toLowerCase()));
-                                  if (!targetLks) continue;
-                                  newEntries.push({
-                                     id: Math.random().toString(36).substr(2, 9),
-                                     lksId: targetLks.id,
-                                     nama: cols[0], nik: cols[2], noKK: cols[3], tempatLahir: cols[4],
-                                     tanggalLahir: cols[5], umur: parseInt(cols[6]) || 0,
-                                     jenisKelamin: cols[7] as any, alamat: `${cols[10]}, ${cols[9]}, ${cols[8]}`,
-                                     asalDesa: cols[10], asalKecamatan: cols[9], asalKabKota: cols[8],
-                                     jenisBantuan: targetLks.jenisBantuan, 
-                                     kategori: cols[11].includes('Dalam') ? 'Dalam' : 'Luar', keterangan: 'Imported CSV'
-                                  });
-                               }
-                               setPmData(prev => [...prev, ...newEntries]);
-                               if (onNotify) onNotify('Import PM', `${newEntries.length} Data BNBA`);
-                               setIsImporting(false);
-                               alert('Data berhasil diimpor.');
-                            };
-                            reader.readAsText(file);
-                         }
-                      }} />
-                   </label>
+             <div className="w-20 h-20 mx-auto bg-indigo-50 text-indigo-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><Upload size={36} /></div>
+             <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter uppercase">Import Batch PM</h3>
+             <p className="text-slate-500 text-[10px] mb-8 leading-relaxed font-bold uppercase tracking-widest">Gunakan format CSV untuk menambahkan PM secara massal.</p>
+             
+             <div className="bg-slate-50 p-4 rounded-2xl mb-10 text-left border border-slate-100">
+                <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Urutan Kolom CSV (Total 12 Kolom):</p>
+                <div className="text-[8px] font-bold text-slate-600 leading-relaxed space-y-1">
+                  <p>1. Nama</p>
+                  <p>2. Lembaga (LKS)</p>
+                  <p>3. NIK (16 digit)</p>
+                  <p>4. No KK</p>
+                  <p>5. Tempat Lahir</p>
+                  <p>6. Tgl Lahir (YYYY-MM-DD atau DD/MM/YYYY)</p>
+                  <p>7. Umur (Akan dihitung ulang)</p>
+                  <p>8. JK (L/P)</p>
+                  <p>9. KabKota</p>
+                  <p>10. Kecamatan</p>
+                  <p>11. Desa</p>
+                  <p>12. Kategori (Dalam/Luar)</p>
                 </div>
+             </div>
+
+             <div className="flex gap-2">
+                <button onClick={() => setIsImporting(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+                <label className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg cursor-pointer flex items-center justify-center gap-2 active:scale-95 transition-all">
+                   <FileSpreadsheet size={18} /> PILIH FILE CSV
+                   <input type="file" accept=".csv" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                         const reader = new FileReader();
+                         reader.onload = (event) => {
+                            const text = event.target?.result as string;
+                            const lines = text.split('\n');
+                            const newEntries: PMType[] = [];
+                            let importCount = 0;
+                            let failCount = 0;
+
+                            for (let i = 1; i < lines.length; i++) {
+                               const line = lines[i].trim();
+                               if (!line) continue;
+                               
+                               // Handle CSV with quotes properly
+                               const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                               
+                               if (cols.length < 3 || !cols[0]) continue;
+
+                               const lksNamaSearch = cols[1]?.toLowerCase() || '';
+                               const targetLks = lksData.find(l => l.nama.toLowerCase().includes(lksNamaSearch) || lksNamaSearch.includes(l.nama.toLowerCase()));
+                               
+                               if (!targetLks) {
+                                  failCount++;
+                                  continue;
+                               }
+
+                               // Parsing Tanggal Lahir dari CSV dengan Helper
+                               const rawDate = cols[5] || '';
+                               const formattedTanggalLahir = parseDateString(rawDate);
+
+                               // Calculate age from CSV birthdate if possible, otherwise use age column
+                               let calculatedAge = parseInt(cols[6]) || 0;
+                               if (formattedTanggalLahir) {
+                                  const birth = new Date(formattedTanggalLahir);
+                                  if (!isNaN(birth.getTime())) {
+                                     const today = new Date();
+                                     let age = today.getFullYear() - birth.getFullYear();
+                                     const m = today.getMonth() - birth.getMonth();
+                                     if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+                                     calculatedAge = age < 0 ? 0 : age;
+                                  }
+                               }
+
+                               newEntries.push({
+                                  id: Math.random().toString(36).substr(2, 9),
+                                  lksId: targetLks.id,
+                                  nama: cols[0], 
+                                  nik: cols[2], 
+                                  noKK: cols[3] || '', 
+                                  tempatLahir: cols[4] || '',
+                                  tanggalLahir: formattedTanggalLahir, 
+                                  umur: calculatedAge,
+                                  jenisKelamin: (cols[7] === 'P' || cols[7]?.toLowerCase() === 'p' || cols[7]?.toLowerCase().includes('perempuan')) ? 'P' : 'L', 
+                                  asalKabKota: cols[8] || 'Blora',
+                                  asalKecamatan: cols[9] || '',
+                                  asalDesa: cols[10] || '',
+                                  alamat: `${cols[10] || ''}, ${cols[9] || ''}, ${cols[8] || ''}`,
+                                  jenisBantuan: targetLks.jenisBantuan, 
+                                  kategori: (cols[11] && cols[11].toLowerCase().includes('luar')) ? 'Luar' : 'Dalam', 
+                                  keterangan: 'Batch Imported'
+                               });
+                               importCount++;
+                            }
+                            
+                            if (newEntries.length > 0) {
+                               setPmData(prev => [...newEntries, ...prev]);
+                               if (onNotify) onNotify('Import Batch', `${importCount} PM Berhasil`);
+                               alert(`Berhasil mengimpor ${importCount} PM.\nGagal: ${failCount} (LKS tidak ditemukan atau kolom tidak valid).`);
+                            } else {
+                               alert('Tidak ada data valid yang dapat diimpor.');
+                            }
+                            setIsImporting(false);
+                         };
+                         reader.readAsText(file);
+                      }
+                   }} />
+                </label>
              </div>
           </div>
         </div>
       )}
 
-      {/* PRINT AREA BNBA LENGKAP - Disesuaikan untuk Filter Dinamis */}
+      {/* PRINT AREA BNBA */}
       <div id="print-bnba-full-list" className="hidden p-12 bg-white text-black arial-force">
         <div className="text-center mb-8 border-b-4 border-double border-black pb-4 arial-force">
           <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
           <h2 className="text-2xl font-black uppercase arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
-          <p className="text-[10px] font-medium mt-1 arial-force">Jl. Pemuda No.16 A Blora 58215, No. Tlp: (0296) 5298541</p>
           <div className="mt-6 pt-4 border-t border-black arial-force">
-            <h3 className="text-lg font-bold underline uppercase arial-force">DATA BY NAME BY ADDRESS (BNBA) PENERIMA MANFAAT</h3>
-            <p className="text-sm font-bold mt-2 arial-force">
-                Lembaga: {downloadLksId === 'all' ? 'SELURUH LKS KABUPATEN BLORA' : lksData.find(l => l.id === downloadLksId)?.nama} | 
-                Kategori: {downloadCategory === 'Semua' ? 'SEMUA (DALAM & LUAR PANTI)' : downloadCategory === 'Dalam' ? 'DALAM PANTI (RESIDENSIAL)' : 'LUAR PANTI (NON-RESIDENSIAL)'}
-            </p>
+            <h3 className="text-lg font-bold underline uppercase arial-force">DATA BY NAME BY ADDRESS (BNBA) PM</h3>
           </div>
         </div>
         <table className="w-full text-[8pt] border-collapse border border-black arial-force">
           <thead>
             <tr className="bg-slate-100">
-              <th className="border border-black p-2 arial-force">No</th>
-              <th className="border border-black p-2 arial-force">Nama PM</th>
-              <th className="border border-black p-2 arial-force">LKS / Lembaga</th>
-              <th className="border border-black p-2 arial-force">NIK</th>
-              <th className="border border-black p-2 arial-force">No. KK</th>
-              <th className="border border-black p-2 arial-force">Tempat/Tgl Lahir</th>
-              <th className="border border-black p-2 arial-force">JK</th>
-              <th className="border border-black p-2 arial-force">Asal Wilayah (Desa/Kec/Kab)</th>
-              <th className="border border-black p-2 arial-force">Status</th>
+              <th className="border border-black p-2">No</th>
+              <th className="border border-black p-2">Nama PM</th>
+              <th className="border border-black p-2">LKS</th>
+              <th className="border border-black p-2">NIK</th>
+              <th className="border border-black p-2">Asal</th>
+              <th className="border border-black p-2">Status</th>
             </tr>
           </thead>
           <tbody>
-            {pmToDownload.map((pm, i) => {
-              const currentLks = lksData.find(l => l.id === pm.lksId);
-              return (
-                <tr key={pm.id}>
-                  <td className="border border-black p-1.5 text-center arial-force">{i + 1}</td>
-                  <td className="border border-black p-1.5 font-bold arial-force uppercase">{pm.nama}</td>
-                  <td className="border border-black p-1.5 arial-force text-[7pt] uppercase">{currentLks?.nama || '-'}</td>
-                  <td className="border border-black p-1.5 arial-force">{pm.nik}</td>
-                  <td className="border border-black p-1.5 arial-force">{pm.noKK || '-'}</td>
-                  <td className="border border-black p-1.5 arial-force text-[7pt]">{pm.tempatLahir || '-'}, {pm.tanggalLahir || '-'}</td>
-                  <td className="border border-black p-1.5 text-center arial-force">{pm.jenisKelamin}</td>
-                  <td className="border border-black p-1.5 arial-force text-[7pt] uppercase">{pm.asalDesa}, {pm.asalKecamatan}, {pm.asalKabKota}</td>
-                  <td className="border border-black p-1.5 text-center uppercase arial-force text-[7pt] font-black">{pm.kategori === 'Dalam' ? 'DALAM' : 'LUAR'}</td>
-                </tr>
-              );
-            })}
-            {pmToDownload.length === 0 && (
-              <tr><td colSpan={9} className="border border-black p-10 text-center italic arial-force">TIDAK ADA DATA DITEMUKAN PADA FILTER INI</td></tr>
-            )}
+            {pmToDownload.map((pm, i) => (
+              <tr key={pm.id}>
+                <td className="border border-black p-1.5 text-center">{i + 1}</td>
+                <td className="border border-black p-1.5 font-bold uppercase">{pm.nama}</td>
+                <td className="border border-black p-1.5 uppercase text-[7pt]">{lksData.find(l => l.id === pm.lksId)?.nama || '-'}</td>
+                <td className="border border-black p-1.5">{pm.nik}</td>
+                <td className="border border-black p-1.5 uppercase text-[7pt]">{pm.asalDesa}, {pm.asalKecamatan}</td>
+                <td className="border border-black p-1.5 text-center uppercase font-black">{pm.kategori}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        <div className="mt-10 flex justify-end arial-force">
-          <div className="text-center w-64 arial-force">
-             <p className="arial-force text-sm">Blora, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
-             <p className="font-bold arial-force mt-1 text-sm">Petugas Verifikator,</p>
-             <div className="h-20"></div>
-             <p className="font-bold underline arial-force">( ........................................ )</p>
-          </div>
-        </div>
       </div>
 
       <style>{`
