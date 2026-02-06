@@ -2,9 +2,8 @@
 import { LKS, PenerimaManfaat, UserAccount } from './types';
 
 export const KECAMATAN_BLORA = [
-  'Blora', 'Cepu', 'Jepon', 'Sambong', 'Jati', 'Randublatung', 'Kradenan', 
-  'Kedungtuban', 'Banjarejo', 'Tunjungan', 'Japah', 'Ngawen', 'Kunduran', 
-  'Todanan', 'Bogorejo'
+  'Blora', 'Banjarejo', 'Bogorejo', 'Cepu', 'Japah', 'Jati', 'Jepon', 'Jiken', 'Kradenan', 
+  'Kedungtuban', 'Kunduran', 'Ngawen', 'Randublatung', 'Sambong', 'Todanan', 'Tunjungan'
 ];
 
 export const JENIS_BANTUAN_LIST = [

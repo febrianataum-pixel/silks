@@ -4,7 +4,8 @@ import {
   Search, ChevronRight, User, Users, MapPin, Trash2, 
   Printer, ArrowLeft, Upload, FileSpreadsheet, Download, 
   Info, AlertCircle, CheckCircle2, X, Plus, Loader2, 
-  UserPlus, Calendar, Home, Globe, Hash, Landmark, Save, Edit3
+  UserPlus, Calendar, Home, Globe, Hash, Landmark, Save, Edit3,
+  FileText, Filter, CheckCircle
 } from 'lucide-react';
 import { LKS, PenerimaManfaat as PMType, PMKategori } from '../types';
 import { KECAMATAN_BLORA } from '../constants';
@@ -27,6 +28,11 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   const [isAdding, setIsAdding] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
+  // States for Download Modal
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [downloadLksId, setDownloadLksId] = useState<string>('all');
+  const [downloadCategory, setDownloadCategory] = useState<'Semua' | PMKategori>('Semua');
+
   // Searchable LKS Select States
   const [lksSearchTerm, setLksSearchTerm] = useState('');
   const [showLksDropdown, setShowLksDropdown] = useState(false);
@@ -74,6 +80,21 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     );
   }, [pmData, selectedLksId, categoryFilter, searchTerm]);
 
+  // Data for PDF Download
+  const pmToDownload = useMemo(() => {
+    return pmData.filter(p => {
+      const matchesLks = downloadLksId === 'all' || p.lksId === downloadLksId;
+      const matchesCat = downloadCategory === 'Semua' || p.kategori === downloadCategory;
+      return matchesLks && matchesCat;
+    }).sort((a, b) => {
+        // Sort by LKS Name then PM Name
+        const lksA = lksData.find(l => l.id === a.lksId)?.nama || '';
+        const lksB = lksData.find(l => l.id === b.lksId)?.nama || '';
+        if (lksA !== lksB) return lksA.localeCompare(lksB);
+        return a.nama.localeCompare(b.nama);
+    });
+  }, [pmData, downloadLksId, downloadCategory, lksData]);
+
   const handleOpenEdit = (pm: PMType) => {
     setFormData(pm);
     const lks = lksData.find(l => l.id === pm.lksId);
@@ -96,7 +117,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         alamat: `${formData.asalDesa}, ${formData.asalKecamatan}, ${formData.asalKabKota}`
       } : p));
       if (onNotify) onNotify('Mengupdate PM', formData.nama || 'Data PM');
-      alert('Data Penerima Manfaat berhasil diperbarui.');
     } else {
       // Create Mode
       const pmToAdd: PMType = {
@@ -107,7 +127,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       };
       setPmData(prev => [pmToAdd, ...prev]);
       if (onNotify) onNotify('Menambah PM', pmToAdd.nama);
-      alert('Data Penerima Manfaat berhasil ditambahkan.');
     }
 
     setIsAdding(false);
@@ -131,61 +150,74 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     setShowLksDropdown(false);
   };
 
-  const handleExportBNBAPDF = async () => {
-    const element = document.getElementById('print-bnba-list');
+  const handleDownloadBNBAPDF = async () => {
+    const element = document.getElementById('print-bnba-full-list');
     if (!element) return;
     setIsGenerating(true);
+    
+    const fileName = downloadLksId === 'all' 
+      ? `BNBA_Seluruh_LKS_Blora_${downloadCategory}.pdf`
+      : `BNBA_${lksData.find(l => l.id === downloadLksId)?.nama || 'LKS'}_${downloadCategory}.pdf`;
+
     const options = {
       margin: 10,
-      filename: `BNBA_${selectedLks?.nama || 'LKS_Blora'}.pdf`,
+      filename: fileName,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
+
     try {
       element.classList.remove('hidden');
       await html2pdf().set(options).from(element).save();
       element.classList.add('hidden');
-    } catch (err) { alert('Gagal download PDF.'); } finally { setIsGenerating(false); }
+      setIsDownloadModalOpen(false);
+    } catch (err) { 
+      alert('Gagal download PDF.'); 
+    } finally { 
+      setIsGenerating(false); 
+    }
   };
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-6">
-      {!selectedLksId ? (
-        <>
-          <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="relative z-10">
-              <h2 className="text-3xl font-black mb-3">Manajemen Warga Binaan (PM)</h2>
-              <p className="text-slate-400 max-w-xl text-lg font-medium">Data Terpadu Penerima Manfaat Berdasarkan Lembaga Kesejahteraan Sosial.</p>
-            </div>
-            <div className="flex gap-3 relative z-10">
-              <button onClick={() => { resetForm(); setIsAdding(true); }} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl active:scale-95 transition-all flex items-center gap-2">
-                <Plus size={20} /> TAMBAH PM
-              </button>
-              <button onClick={() => setIsImporting(true)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2">
-                <Upload size={20} /> IMPORT CSV
-              </button>
-            </div>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full -mr-32 -mt-32"></div>
-          </div>
+      {/* Header Utama PM */}
+      <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="relative z-10">
+          <h2 className="text-3xl font-black mb-3">Manajemen Warga Binaan (PM)</h2>
+          <p className="text-slate-400 max-w-xl text-lg font-medium">Data Terpadu Penerima Manfaat Berdasarkan Lembaga Kesejahteraan Sosial.</p>
+        </div>
+        <div className="flex flex-wrap gap-3 relative z-10 justify-center">
+          <button onClick={() => setIsDownloadModalOpen(true)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2">
+            <Download size={20} /> DOWNLOAD BNBA PM
+          </button>
+          <button onClick={() => { resetForm(); setIsAdding(true); }} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl active:scale-95 transition-all flex items-center gap-2">
+            <Plus size={20} /> TAMBAH PM
+          </button>
+          <button onClick={() => setIsImporting(true)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest uppercase shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2">
+            <Upload size={20} /> IMPORT CSV
+          </button>
+        </div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full -mr-32 -mt-32"></div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {lksData.map(lks => (
-              <button key={lks.id} onClick={() => setSelectedLksId(lks.id)} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all text-left group">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner"><User size={28} /></div>
-                  <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-600" />
-                </div>
-                <h3 className="font-black text-slate-800 text-xl mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">{lks.nama}</h3>
-                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold uppercase tracking-widest"><MapPin size={14} className="text-blue-500" /> {lks.kecamatan}</div>
-                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                   <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{pmData.filter(p => p.lksId === lks.id).length} Orang PM</p>
-                   <span className="text-[9px] font-black px-3 py-1 bg-slate-100 text-slate-400 rounded-lg">DETAIL</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
+      {!selectedLksId ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {lksData.map(lks => (
+            <button key={lks.id} onClick={() => setSelectedLksId(lks.id)} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all text-left group">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner"><User size={28} /></div>
+                <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-600" />
+              </div>
+              <h3 className="font-black text-slate-800 text-xl mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">{lks.nama}</h3>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold uppercase tracking-widest"><MapPin size={14} className="text-blue-500" /> {lks.kecamatan}</div>
+              <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+                 <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{pmData.filter(p => p.lksId === lks.id).length} Orang PM</p>
+                 <span className="text-[9px] font-black px-3 py-1 bg-slate-100 text-slate-400 rounded-lg">DETAIL</span>
+              </div>
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -207,8 +239,14 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
               }} className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2">
                 <Plus size={18} /> TAMBAH PM
               </button>
-              <button onClick={handleExportBNBAPDF} disabled={isGenerating} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl hover:bg-black shadow-xl shadow-slate-900/20 active:scale-95 transition-all disabled:opacity-50">
-                {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} PDF BNBA
+              <button 
+                onClick={() => {
+                  setDownloadLksId(selectedLksId);
+                  setIsDownloadModalOpen(true);
+                }} 
+                className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3.5 rounded-2xl hover:bg-black shadow-xl shadow-slate-900/20 active:scale-95 transition-all"
+              >
+                <Printer size={18} /> CETAK PDF
               </button>
             </div>
           </div>
@@ -274,6 +312,73 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DOWNLOAD BNBA */}
+      {isDownloadModalOpen && (
+        <div className="fixed inset-0 z-[700] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsDownloadModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 animate-in zoom-in-95">
+             <div className="flex items-center gap-4 mb-8">
+               <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-lg"><FileText size={28} /></div>
+               <div>
+                  <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Download BNBA PM</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Konfigurasi Laporan PDF Berdasarkan Filter</p>
+               </div>
+             </div>
+
+             <div className="space-y-6">
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Landmark size={14}/> Pilih Lembaga (LKS)</label>
+                   <select 
+                     value={downloadLksId} 
+                     onChange={(e) => setDownloadLksId(e.target.value)}
+                     className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 transition-all"
+                   >
+                      <option value="all">-- SELURUH LKS KABUPATEN --</option>
+                      {lksData.map(l => <option key={l.id} value={l.id}>{l.nama}</option>)}
+                   </select>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Filter size={14}/> Kategori Keberadaan</label>
+                   <div className="grid grid-cols-3 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                      {['Semua', 'Dalam', 'Luar'].map(cat => (
+                        <button 
+                          key={cat} 
+                          onClick={() => setDownloadCategory(cat as any)}
+                          className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all ${downloadCategory === cat ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          {cat === 'Semua' ? 'SEMUA' : cat === 'Dalam' ? 'DALAM' : 'LUAR'}
+                        </button>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                   <div className="flex items-center gap-3 mb-2">
+                      <CheckCircle className="text-blue-500" size={18} />
+                      <p className="text-[10px] font-black text-slate-800 uppercase">Ringkasan Data</p>
+                   </div>
+                   <p className="text-[9px] text-slate-500 font-bold uppercase leading-relaxed">
+                      Laporan akan mencakup <span className="text-blue-600">{pmToDownload.length} data PM</span> terdaftar. 
+                      Format PDF berorientasi Landscape (Mendatar) untuk kolom yang lebih luas.
+                   </p>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                   <button onClick={() => setIsDownloadModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+                   <button 
+                     onClick={handleDownloadBNBAPDF} 
+                     disabled={isGenerating || pmToDownload.length === 0}
+                     className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                   >
+                     {isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} DOWNLOAD PDF
+                   </button>
+                </div>
+             </div>
           </div>
         </div>
       )}
@@ -504,15 +609,18 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         </div>
       )}
 
-      {/* PRINT AREA BNBA LENGKAP */}
-      <div id="print-bnba-list" className="hidden p-12 bg-white text-black arial-force">
+      {/* PRINT AREA BNBA LENGKAP - Disesuaikan untuk Filter Dinamis */}
+      <div id="print-bnba-full-list" className="hidden p-12 bg-white text-black arial-force">
         <div className="text-center mb-8 border-b-4 border-double border-black pb-4 arial-force">
           <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
           <h2 className="text-2xl font-black uppercase arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
           <p className="text-[10px] font-medium mt-1 arial-force">Jl. Pemuda No.16 A Blora 58215, No. Tlp: (0296) 5298541</p>
           <div className="mt-6 pt-4 border-t border-black arial-force">
             <h3 className="text-lg font-bold underline uppercase arial-force">DATA BY NAME BY ADDRESS (BNBA) PENERIMA MANFAAT</h3>
-            <p className="text-sm font-bold mt-2 arial-force">LKS: {selectedLks?.nama || 'Seluruh LKS'}</p>
+            <p className="text-sm font-bold mt-2 arial-force">
+                Lembaga: {downloadLksId === 'all' ? 'SELURUH LKS KABUPATEN BLORA' : lksData.find(l => l.id === downloadLksId)?.nama} | 
+                Kategori: {downloadCategory === 'Semua' ? 'SEMUA (DALAM & LUAR PANTI)' : downloadCategory === 'Dalam' ? 'DALAM PANTI (RESIDENSIAL)' : 'LUAR PANTI (NON-RESIDENSIAL)'}
+            </p>
           </div>
         </div>
         <table className="w-full text-[8pt] border-collapse border border-black arial-force">
@@ -520,35 +628,41 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
             <tr className="bg-slate-100">
               <th className="border border-black p-2 arial-force">No</th>
               <th className="border border-black p-2 arial-force">Nama PM</th>
+              <th className="border border-black p-2 arial-force">LKS / Lembaga</th>
               <th className="border border-black p-2 arial-force">NIK</th>
               <th className="border border-black p-2 arial-force">No. KK</th>
               <th className="border border-black p-2 arial-force">Tempat/Tgl Lahir</th>
-              <th className="border border-black p-2 arial-force">Umur</th>
               <th className="border border-black p-2 arial-force">JK</th>
               <th className="border border-black p-2 arial-force">Asal Wilayah (Desa/Kec/Kab)</th>
-              <th className="border border-black p-2 arial-force">Status Keberadaan</th>
+              <th className="border border-black p-2 arial-force">Status</th>
             </tr>
           </thead>
           <tbody>
-            {filteredPm.map((pm, i) => (
-              <tr key={pm.id}>
-                <td className="border border-black p-1.5 text-center arial-force">{i + 1}</td>
-                <td className="border border-black p-1.5 font-bold arial-force">{pm.nama}</td>
-                <td className="border border-black p-1.5 arial-force">{pm.nik}</td>
-                <td className="border border-black p-1.5 arial-force">{pm.noKK || '-'}</td>
-                <td className="border border-black p-1.5 arial-force">{pm.tempatLahir || '-'}, {pm.tanggalLahir || '-'}</td>
-                <td className="border border-black p-1.5 text-center arial-force">{pm.umur || '-'} Thn</td>
-                <td className="border border-black p-1.5 text-center arial-force">{pm.jenisKelamin}</td>
-                <td className="border border-black p-1.5 arial-force">{pm.asalDesa}, {pm.asalKecamatan}, {pm.asalKabKota}</td>
-                <td className="border border-black p-1.5 text-center uppercase arial-force">{pm.kategori === 'Dalam' ? 'Residensial' : 'Non-Residensial'}</td>
-              </tr>
-            ))}
+            {pmToDownload.map((pm, i) => {
+              const currentLks = lksData.find(l => l.id === pm.lksId);
+              return (
+                <tr key={pm.id}>
+                  <td className="border border-black p-1.5 text-center arial-force">{i + 1}</td>
+                  <td className="border border-black p-1.5 font-bold arial-force uppercase">{pm.nama}</td>
+                  <td className="border border-black p-1.5 arial-force text-[7pt] uppercase">{currentLks?.nama || '-'}</td>
+                  <td className="border border-black p-1.5 arial-force">{pm.nik}</td>
+                  <td className="border border-black p-1.5 arial-force">{pm.noKK || '-'}</td>
+                  <td className="border border-black p-1.5 arial-force text-[7pt]">{pm.tempatLahir || '-'}, {pm.tanggalLahir || '-'}</td>
+                  <td className="border border-black p-1.5 text-center arial-force">{pm.jenisKelamin}</td>
+                  <td className="border border-black p-1.5 arial-force text-[7pt] uppercase">{pm.asalDesa}, {pm.asalKecamatan}, {pm.asalKabKota}</td>
+                  <td className="border border-black p-1.5 text-center uppercase arial-force text-[7pt] font-black">{pm.kategori === 'Dalam' ? 'DALAM' : 'LUAR'}</td>
+                </tr>
+              );
+            })}
+            {pmToDownload.length === 0 && (
+              <tr><td colSpan={9} className="border border-black p-10 text-center italic arial-force">TIDAK ADA DATA DITEMUKAN PADA FILTER INI</td></tr>
+            )}
           </tbody>
         </table>
         <div className="mt-10 flex justify-end arial-force">
           <div className="text-center w-64 arial-force">
-             <p className="arial-force">Blora, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
-             <p className="font-bold arial-force mt-1">Petugas Verifikator,</p>
+             <p className="arial-force text-sm">Blora, {new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
+             <p className="font-bold arial-force mt-1 text-sm">Petugas Verifikator,</p>
              <div className="h-20"></div>
              <p className="font-bold underline arial-force">( ........................................ )</p>
           </div>

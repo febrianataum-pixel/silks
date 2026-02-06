@@ -28,7 +28,7 @@ interface Notification {
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<Page>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [navContext, setNavContext] = useState<{ id: string; type: 'LKS' | 'PM' } | null>(null);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -206,9 +206,10 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter">
-      <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-900 text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 no-print ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
+      {/* SIDEBAR - Hanya untuk Desktop */}
+      <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-900 text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 hidden lg:flex flex-col no-print ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="h-full flex flex-col relative">
-          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 bg-blue-600 rounded-full items-center justify-center text-white border-4 border-slate-50 z-50 hover:scale-110 transition-transform shadow-lg">
+          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="absolute -right-3 top-20 w-6 h-6 bg-blue-600 rounded-full items-center justify-center text-white border-4 border-slate-50 z-50 hover:scale-110 transition-transform shadow-lg">
             {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
           <div className={`p-6 flex items-center gap-3 transition-all duration-300 ${isSidebarCollapsed ? 'px-4' : 'px-6'}`}>
@@ -243,10 +244,10 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-0 overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-0 overflow-hidden relative pb-20 lg:pb-0">
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 no-print">
           <div className="flex items-center gap-6">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-600 transition-colors"><Menu size={24} /></button>
+            {/* Tombol Sidebar Dihapus dari Mobile Header */}
             <div>
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activePage.toUpperCase()}</h2>
               <div className="flex items-center gap-4 mt-1">
@@ -288,7 +289,7 @@ const App: React.FC = () => {
                   </div>
                 )}
              </div>
-             <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl">
+             <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl hidden md:flex">
                {syncStatus === 'connected' ? <Cloud size={20} className="text-blue-500" /> : <CloudOff size={20} />}
              </div>
              <button onClick={() => setActivePage('profile')} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent">
@@ -304,7 +305,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 no-scrollbar">
-          <div className="max-w-7xl mx-auto pb-20">
+          <div className="max-w-7xl mx-auto pb-20 lg:pb-10">
             {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} onNavigateToItem={handleNavigateToDetail} />}
             {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={addNotification} appLogo={appLogo} />}
             {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={addNotification} />}
@@ -330,8 +331,27 @@ const App: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* MOBILE BOTTOM NAVIGATION - Semua Menu Terpusat di Sini */}
+        <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-4 lg:hidden z-[100] no-print shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.1)] rounded-t-[2.5rem]">
+          {[
+            { id: 'dashboard', icon: <LayoutDashboard size={24} /> },
+            { id: 'lks', icon: <Building2 size={24} /> },
+            { id: 'administrasi', icon: <ClipboardList size={24} /> },
+            { id: 'pm', icon: <Users size={24} /> },
+            { id: 'profile', icon: <UserCircle size={24} /> },
+          ].map((item) => (
+            <button 
+              key={item.id} 
+              onClick={() => { setActivePage(item.id as Page); setNavContext(null); }}
+              className={`p-3 transition-all duration-300 relative rounded-2xl ${activePage === item.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-400'}`}
+            >
+              <div className={`${activePage === item.id ? 'scale-110' : ''} transition-transform`}>{item.icon}</div>
+              {activePage === item.id && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>}
+            </button>
+          ))}
+        </nav>
       </main>
-      {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/60 lg:hidden z-40 backdrop-blur-md no-print animate-in fade-in duration-300" onClick={() => setIsSidebarOpen(false)}></div>}
     </div>
   );
 };
