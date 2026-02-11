@@ -9,6 +9,7 @@ import AdvancedSearchPage from './pages/AdvancedSearch';
 import RekomendasiPage from './pages/Rekomendasi';
 import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
+import AIChat from './AIChat'; // Import Asisten AI
 import { MOCK_LKS, MOCK_PM, MOCK_USERS } from './constants';
 import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './types';
 
@@ -208,7 +209,7 @@ const App: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter">
+    <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter relative">
       {/* SIDEBAR - Hanya untuk Desktop */}
       <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-900 text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 hidden lg:flex flex-col no-print ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="h-full flex flex-col relative">
@@ -254,7 +255,6 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-0 overflow-hidden relative pb-20 lg:pb-0">
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 no-print">
           <div className="flex items-center gap-6">
-            {/* Tombol Sidebar Dihapus dari Mobile Header */}
             <div>
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activePage.toUpperCase()}</h2>
               <div className="flex items-center gap-4 mt-1">
@@ -359,6 +359,9 @@ const App: React.FC = () => {
             </button>
           ))}
         </nav>
+
+        {/* SMART ASSISTANT AI */}
+        <AIChat />
       </main>
     </div>
   );
