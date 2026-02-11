@@ -37,12 +37,9 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   const [viewingPm, setViewingPm] = useState<PMType | null>(null);
   const [deleteConfirmPm, setDeleteConfirmPm] = useState<PMType | null>(null);
   
-  // State for Bulk Actions
   const [selectedPmIds, setSelectedPmIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
-
   const [sortPm, setSortPm] = useState<SortConfig>({ key: 'nama', direction: 'asc' });
-  
   const [lksSearchTerm, setLksSearchTerm] = useState('');
   const [showLksDropdown, setShowLksDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,16 +50,27 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     asalDesa: '', kategori: 'Dalam', keterangan: ''
   });
 
-  // Calculate age automatically when birth date changes
+  // --- HELPER: CALCULATE AGE ---
+  const calculateAge = (dateString: string | undefined): number => {
+    if (!dateString) return 0;
+    const birthDate = new Date(dateString);
+    const today = new Date();
+    if (isNaN(birthDate.getTime())) return 0;
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age < 0 ? 0 : age;
+  };
+
+  // Auto-calculate age in form
   useEffect(() => {
     if (formData.tanggalLahir) {
-      const birthDate = new Date(formData.tanggalLahir);
-      const today = new Date();
-      if (!isNaN(birthDate.getTime())) {
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-        setFormData(prev => ({ ...prev, umur: age < 0 ? 0 : age }));
+      const newAge = calculateAge(formData.tanggalLahir);
+      if (newAge !== formData.umur) {
+        setFormData(prev => ({ ...prev, umur: newAge }));
       }
     }
   }, [formData.tanggalLahir]);
@@ -97,10 +105,8 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       result.sort((a: any, b: any) => {
         let valA = a[sortPm.key] || '';
         let valB = b[sortPm.key] || '';
-        
         if (typeof valA === 'string') valA = valA.toLowerCase();
         if (typeof valB === 'string') valB = valB.toLowerCase();
-
         if (valA < valB) return sortPm.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortPm.direction === 'asc' ? 1 : -1;
         return 0;
@@ -111,9 +117,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
 
   const requestSort = (key: keyof PMType) => {
     let direction: 'asc' | 'desc' = 'asc';
-    if (sortPm.key === key && sortPm.direction === 'asc') {
-      direction = 'desc';
-    }
+    if (sortPm.key === key && sortPm.direction === 'asc') direction = 'desc';
     setSortPm({ key, direction });
   };
 
@@ -127,10 +131,14 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       const lines = text.split('\n');
       const newEntries: PMType[] = [];
 
-      // Skipping header
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
         if (cols.length < 3) continue;
+
+        const tglLahir = cols[4] || '';
+        const csvAge = parseInt(cols[5]) || 0;
+        // JIKA USIA 0, OTOMATIS HITUNG DARI TGL LAHIR
+        const finalAge = csvAge > 0 ? csvAge : calculateAge(tglLahir);
 
         newEntries.push({
           id: Math.random().toString(36).substr(2, 9),
@@ -139,8 +147,8 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
           nik: cols[1] || '',
           noKK: cols[2] || '',
           tempatLahir: cols[3] || '',
-          tanggalLahir: cols[4] || '',
-          umur: parseInt(cols[5]) || 0,
+          tanggalLahir: tglLahir,
+          umur: finalAge,
           jenisKelamin: (cols[6] === 'P' ? 'P' : 'L') as 'L' | 'P',
           asalKabKota: cols[7] || 'Blora',
           asalKecamatan: cols[8] || '',
@@ -155,9 +163,10 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       setPmData(prev => [...newEntries, ...prev]);
       setIsImporting(false);
       if (onNotify) onNotify('Import PM', `${newEntries.length} Data Berhasil`);
-      alert(`Berhasil mengimpor ${newEntries.length} data PM.`);
+      alert(`Berhasil mengimpor ${newEntries.length} data PM. Usia telah dihitung otomatis.`);
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset input
   };
 
   const handleToggleSelectPm = (id: string) => {
@@ -227,7 +236,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   };
 
   const handleOpenEdit = (pm: PMType) => {
-    setFormData(pm);
+    setFormData({ ...pm, umur: calculateAge(pm.tanggalLahir) }); // Recalculate age on open
     const lks = lksData.find(l => l.id === pm.lksId);
     setLksSearchTerm(lks?.nama || '');
     setIsAdding(true);
@@ -242,6 +251,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     }
     const finalData = {
       ...formData,
+      umur: calculateAge(formData.tanggalLahir), // Re-verify age on save
       asalKabKota: formData.asalKabKota || 'Blora',
       alamat: `${formData.asalDesa || '-'}, ${formData.asalKecamatan || '-'}, ${formData.asalKabKota || 'Blora'}`,
     } as PMType;
