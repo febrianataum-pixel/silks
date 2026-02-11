@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline, Copy, Edit3, AlertTriangle, FileJson, CheckCircle, Camera } from 'lucide-react';
+import { Plus, FileText, Printer, Save, Trash2, Calendar, Upload, ArrowLeft, Bold, Italic, AlignLeft, AlignCenter, Search, Mail, MapPin, User, Hash, X, ImageIcon, RefreshCw, HelpCircle, Loader2, List, Type, Underline, Copy, Edit3, AlertTriangle, FileJson, CheckCircle, Camera, RotateCcw } from 'lucide-react';
 import { LKS, LetterRecord } from '../types';
 
 declare const html2pdf: any;
@@ -40,7 +40,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
   const [formData, setFormData] = useState(initialFormData);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Load Concept (Template) from LocalStorage
   useEffect(() => {
     const savedConcept = localStorage.getItem('si-lks-letter-concept');
     if (savedConcept && !editingLetterId && isCreating) {
@@ -101,9 +100,20 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
     localStorage.setItem('si-lks-letter-concept', JSON.stringify(conceptData));
     setTimeout(() => {
       setIsSavingConcept(false);
-      alert('Konsep surat, logo, dan profil penandatangan berhasil disimpan sebagai template default.');
+      alert('Konsep surat berhasil disimpan sebagai template.');
       if (onNotify) onNotify('Simpan Konsep', 'Template Surat');
     }, 800);
+  };
+
+  const handleResetConcept = () => {
+    if (confirm('Hapus template yang tersimpan dan kembali ke pengaturan awal?')) {
+      localStorage.removeItem('si-lks-letter-concept');
+      setFormData(initialFormData);
+      if (editorRef.current) {
+        editorRef.current.innerHTML = '<p>Ketik isi surat di sini...</p>';
+      }
+      alert('Template telah direset.');
+    }
   };
 
   useEffect(() => {
@@ -188,8 +198,11 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
           <div className="flex items-center justify-between no-print">
             <button onClick={() => { setIsCreating(false); setEditingLetterId(null); }} className="flex items-center gap-3 px-5 py-2.5 bg-white border rounded-2xl text-slate-500 font-black text-xs uppercase hover:text-blue-600 transition-all"><ArrowLeft size={18} /> Kembali</button>
             <div className="flex gap-3">
+              <button onClick={handleResetConcept} className="p-3 bg-white border border-rose-100 text-rose-500 rounded-2xl hover:bg-rose-50 transition-all" title="Reset Template">
+                <RotateCcw size={20} />
+              </button>
               <button onClick={handleSaveConcept} disabled={isSavingConcept} className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2">
-                {isSavingConcept ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16} />} SIMPAN KONSEP (TEMPLATE)
+                {isSavingConcept ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16} />} SIMPAN KONSEP
               </button>
               <button onClick={handleDownloadPDF} disabled={isGenerating} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase shadow-xl disabled:opacity-50 flex items-center gap-2">{isGenerating ? <Loader2 className="animate-spin" size={18} /> : <Printer size={18} />} UNDUH PDF</button>
               <button onClick={handleSave} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase shadow-xl">SIMPAN ARSIP</button>
@@ -198,15 +211,12 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="space-y-4 no-print h-fit sticky top-24 overflow-y-auto max-h-[85vh] no-scrollbar pr-2">
                <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-8">
-                  {/* Data Surat */}
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black text-blue-600 uppercase border-b pb-2 tracking-widest">I. Data Lembaga & Surat</h4>
                     <select className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-xs" value={formData.lksId} onChange={e=>setFormData({...formData, lksId: e.target.value})}><option value="">-- Pilih Lembaga --</option>{lksData.map(l => <option key={l.id} value={l.id}>{l.nama}</option>)}</select>
                     <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nomor Surat</label><input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.nomorSurat} onChange={e=>setFormData({...formData, nomorSurat: e.target.value})} /></div>
                     <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">Tujuan (Yth.)</label><input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.recipientName} onChange={e=>setFormData({...formData, recipientName: e.target.value})} /></div>
                   </div>
-
-                  {/* Konfigurasi Penandatangan */}
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black text-indigo-600 uppercase border-b pb-2 tracking-widest">II. Kop & Penandatangan</h4>
                     <div className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
@@ -225,17 +235,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
                     <div className="space-y-1">
                        <label className="text-[9px] font-black text-slate-400 uppercase ml-1">NIP Pejabat</label>
                        <input type="text" className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold" value={formData.nipPenandatangan} onChange={e=>setFormData({...formData, nipPenandatangan: e.target.value})} />
-                    </div>
-                  </div>
-
-                  {/* Editor Toolbar */}
-                  <div className="space-y-4 pt-2">
-                    <h4 className="text-[10px] font-black text-emerald-600 uppercase border-b pb-2 tracking-widest">III. Editor Toolbar</h4>
-                    <div className="grid grid-cols-4 gap-2">
-                      <button onClick={()=>handleCommand('bold')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Bold size={16}/></button>
-                      <button onClick={()=>handleCommand('italic')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Italic size={16}/></button>
-                      <button onClick={()=>handleCommand('underline')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><Underline size={16}/></button>
-                      <button onClick={()=>handleCommand('justifyLeft')} className="p-2 border rounded-xl hover:bg-slate-50 flex items-center justify-center"><AlignLeft size={16}/></button>
                     </div>
                   </div>
                </div>
@@ -268,20 +267,6 @@ const RekomendasiPage: React.FC<RekomendasiPageProps> = ({ lksData, letters, set
                     </div>
                  </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmId(null)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center animate-in zoom-in-95 shadow-2xl">
-            <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={36} /></div>
-            <h3 className="text-2xl font-black text-slate-800 mb-2">Hapus Arsip Surat?</h3>
-            <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Data surat ini akan dihapus permanen dari arsip rekomendasi.</p>
-            <div className="flex gap-4">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
-              <button onClick={() => { setLetters(prev => prev.filter(l => l.id !== deleteConfirmId)); setDeleteConfirmId(null); }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">HAPUS ARSIP</button>
             </div>
           </div>
         </div>
