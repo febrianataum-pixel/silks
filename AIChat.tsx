@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, Sparkles, User, RefreshCw, Loader2, Minimize2, Maximize2, Paperclip, ImageIcon, Trash2, Key, AlertCircle, ExternalLink, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, Sparkles, User, RefreshCw, Loader2, Minimize2, Maximize2, Paperclip, ImageIcon, Trash2, Key, AlertCircle, ExternalLink, Mic, MicOff, Volume2, VolumeX, Settings } from 'lucide-react';
 import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
 
 interface Message {
@@ -12,6 +12,7 @@ interface Message {
 const AIChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [hasKey, setHasKey] = useState<boolean>(true);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -119,7 +120,6 @@ const AIChat: React.FC = () => {
             setMessages(prev => [...prev, { role: 'model', text: 'Mendengarkan... Silakan bicara.' }]);
           },
           onmessage: async (message: LiveServerMessage) => {
-            // Handle Audio Data
             const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
             if (base64Audio && audioContextOutputRef.current) {
               const ctx = audioContextOutputRef.current;
@@ -134,7 +134,6 @@ const AIChat: React.FC = () => {
               source.onended = () => activeSourcesRef.current.delete(source);
             }
 
-            // Handle Transcriptions
             if (message.serverContent?.outputTranscription) {
               const text = message.serverContent.outputTranscription.text;
               setMessages(prev => {
@@ -153,7 +152,14 @@ const AIChat: React.FC = () => {
             }
           },
           onclose: () => stopLiveMode(),
-          onerror: () => stopLiveMode()
+          onerror: (err: any) => {
+             console.error(err);
+             if (err?.message?.includes("entity was not found") || err?.toString().includes("404")) {
+                setHasKey(false);
+                handleOpenKeySelection();
+             }
+             stopLiveMode();
+          }
         },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -165,10 +171,15 @@ const AIChat: React.FC = () => {
       });
 
       sessionRef.current = await sessionPromise;
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setIsLoading(false);
-      alert("Gagal mengakses mikrofon atau menyambung ke Live API.");
+      if (err?.message?.includes("entity was not found")) {
+        setHasKey(false);
+        handleOpenKeySelection();
+      } else {
+        alert("Gagal mengakses mikrofon atau menyambung ke Live API.");
+      }
     }
   };
 
@@ -186,6 +197,7 @@ const AIChat: React.FC = () => {
     if (aistudio) {
       await aistudio.openSelectKey();
       setHasKey(true);
+      setShowSettings(false);
     }
   };
 
@@ -232,8 +244,13 @@ const AIChat: React.FC = () => {
       });
 
       setMessages(prev => [...prev, { role: 'model', text: response.text || "Terjadi kesalahan." }]);
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'model', text: "Gagal terhubung ke AI. Pastikan API Key valid." }]);
+    } catch (error: any) {
+      if (error?.message?.includes("entity was not found")) {
+        setHasKey(false);
+        handleOpenKeySelection();
+      } else {
+        setMessages(prev => [...prev, { role: 'model', text: "Gagal terhubung ke AI. Pastikan API Key valid." }]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -257,6 +274,9 @@ const AIChat: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-lg text-slate-400 hover:text-white transition-all ${showSettings ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Settings size={16} />
+              </button>
               <button onClick={() => setIsMinimized(!isMinimized)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400">
                 {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
               </button>
@@ -265,6 +285,19 @@ const AIChat: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {showSettings && !isMinimized && (
+            <div className="p-6 bg-slate-100 border-b animate-in fade-in slide-in-from-top-2 duration-300">
+              <p className="text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">Pengaturan Asisten</p>
+              <button 
+                onClick={handleOpenKeySelection}
+                className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+              >
+                <Key size={14} /> Konfigurasi API Key
+              </button>
+              <p className="mt-3 text-[8px] text-slate-400 leading-relaxed italic">Gunakan tombol di atas untuk mengganti atau memasukkan API Key Anda secara manual melalui jendela aman AI Studio.</p>
+            </div>
+          )}
 
           {!isMinimized && (
             <>

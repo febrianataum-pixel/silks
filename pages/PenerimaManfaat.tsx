@@ -137,7 +137,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
 
         const tglLahir = cols[4] || '';
         const csvAge = parseInt(cols[5]) || 0;
-        // JIKA USIA 0, OTOMATIS HITUNG DARI TGL LAHIR
         const finalAge = csvAge > 0 ? csvAge : calculateAge(tglLahir);
 
         newEntries.push({
@@ -166,7 +165,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       alert(`Berhasil mengimpor ${newEntries.length} data PM. Usia telah dihitung otomatis.`);
     };
     reader.readAsText(file);
-    e.target.value = ''; // Reset input
+    e.target.value = '';
   };
 
   const handleToggleSelectPm = (id: string) => {
@@ -193,7 +192,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
 
   const handleExportExcelPM = () => {
     if (!selectedLksId || filteredPm.length === 0) return;
-    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir", "Umur", "JK", "KabKota", "Kecamatan", "Desa", "Kategori"];
+    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir", "Usia", "JK", "KabKota", "Kecamatan", "Desa", "Kategori"];
     const rows = filteredPm.map(p => {
       const lks = lksData.find(l => l.id === p.lksId)?.nama || '-';
       return [
@@ -236,7 +235,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   };
 
   const handleOpenEdit = (pm: PMType) => {
-    setFormData({ ...pm, umur: calculateAge(pm.tanggalLahir) }); // Recalculate age on open
+    setFormData({ ...pm, umur: calculateAge(pm.tanggalLahir) });
     const lks = lksData.find(l => l.id === pm.lksId);
     setLksSearchTerm(lks?.nama || '');
     setIsAdding(true);
@@ -251,7 +250,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     }
     const finalData = {
       ...formData,
-      umur: calculateAge(formData.tanggalLahir), // Re-verify age on save
+      umur: calculateAge(formData.tanggalLahir),
       asalKabKota: formData.asalKabKota || 'Blora',
       alamat: `${formData.asalDesa || '-'}, ${formData.asalKecamatan || '-'}, ${formData.asalKabKota || 'Blora'}`,
     } as PMType;
