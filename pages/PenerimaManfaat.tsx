@@ -1,15 +1,15 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, ChevronRight, User, Users, MapPin, Trash2, 
   Printer, ArrowLeft, Upload, FileSpreadsheet, Download, 
   Info, AlertCircle, CheckCircle2, X, Plus, Loader2, 
   UserPlus, Calendar, Home, Globe, Hash, Landmark, Save, Edit3,
   FileText, Filter, CheckCircle, Building2, FileOutput, FileInput, AlertTriangle, Eye,
-  ChevronUp, ChevronDown, ArrowUpDown, RefreshCw
+  ChevronUp, ChevronDown, ArrowUpDown, RefreshCw, CheckSquare, Square
 } from 'lucide-react';
 import { LKS, PenerimaManfaat as PMType, PMKategori } from '../types';
-import { KECAMATAN_BLORA, MOCK_LKS } from '../constants';
+import { KECAMATAN_BLORA } from '../constants';
 
 declare const html2pdf: any;
 
@@ -32,16 +32,18 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   const [searchTermLks, setSearchTermLks] = useState(''); 
   const [categoryFilter, setCategoryFilter] = useState<'Semua' | PMKategori>('Semua');
   const [isImporting, setIsImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [importResult, setImportResult] = useState({ success: 0, skipped: 0 });
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [viewingPm, setViewingPm] = useState<PMType | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [deleteConfirmPm, setDeleteConfirmPm] = useState<PMType | null>(null);
   
+  // State for Bulk Actions
+  const [selectedPmIds, setSelectedPmIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
   const [sortLks, setSortLks] = useState<SortConfig>({ key: 'nama', direction: 'asc' });
   const [sortPm, setSortPm] = useState<SortConfig>({ key: 'nama', direction: 'asc' });
-  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  
   const [lksSearchTerm, setLksSearchTerm] = useState('');
   const [showLksDropdown, setShowLksDropdown] = useState(false);
 
@@ -51,6 +53,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     asalDesa: '', kategori: 'Dalam', keterangan: ''
   });
 
+  // Calculate age automatically when birth date changes
   useEffect(() => {
     if (formData.tanggalLahir) {
       const birthDate = new Date(formData.tanggalLahir);
@@ -76,20 +79,6 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
 
   const selectedLks = lksData.find(l => l.id === selectedLksId);
 
-  const handleSortLks = (key: string) => {
-    setSortLks(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
-  const handleSortPm = (key: string) => {
-    setSortPm(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
   const filteredLksSelection = useMemo(() => {
     let result = lksData.filter(l => 
       l.nama.toLowerCase().includes(searchTermLks.toLowerCase()) ||
@@ -99,17 +88,13 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       result.sort((a, b) => {
         let valA: any = a[sortLks.key as keyof LKS];
         let valB: any = b[sortLks.key as keyof LKS];
-        if (sortLks.key === 'jumlahPM') {
-           valA = pmData.filter(p => p.lksId === a.id).length;
-           valB = pmData.filter(p => p.lksId === b.id).length;
-        }
         if (valA < valB) return sortLks.direction === 'asc' ? -1 : 1;
         if (valA > valB) return sortLks.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
     return result;
-  }, [lksData, searchTermLks, sortLks, pmData]);
+  }, [lksData, searchTermLks, sortLks]);
 
   const filteredPm = useMemo(() => {
     let result = pmData.filter(p => 
@@ -129,6 +114,73 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     return result;
   }, [pmData, selectedLksId, categoryFilter, searchTerm, sortPm]);
 
+  // Checklist Selection Handlers
+  const handleToggleSelectPm = (id: string) => {
+    const next = new Set(selectedPmIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedPmIds(next);
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedPmIds.size === filteredPm.length && filteredPm.length > 0) {
+      setSelectedPmIds(new Set());
+    } else {
+      setSelectedPmIds(new Set(filteredPm.map(p => p.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    setPmData(prev => prev.filter(p => !selectedPmIds.has(p.id)));
+    if (onNotify) onNotify('Hapus Massal', `${selectedPmIds.size} Data PM`);
+    setSelectedPmIds(new Set());
+    setIsBulkDeleteModalOpen(false);
+  };
+
+  const handleExportExcelPM = () => {
+    if (!selectedLksId || filteredPm.length === 0) return;
+    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir", "Umur", "JK", "KabKota", "Kecamatan", "Desa", "Kategori"];
+    const rows = filteredPm.map(p => {
+      const lks = lksData.find(l => l.id === p.lksId)?.nama || '-';
+      return [
+        `"${p.nama}"`, `"${lks}"`, `"${p.nik}"`, `"${p.noKK || '-'}"`, `"${p.tempatLahir || '-'}"`, 
+        `"${p.tanggalLahir || '-'}"`, `"${p.umur}"`, `"${p.jenisKelamin}"`, `"${p.asalKabKota || 'Blora'}"`, 
+        `"${p.asalKecamatan || '-'}"`, `"${p.asalDesa || '-'}"`, `"${p.kategori}"`
+      ];
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Rekap_PM_${selectedLks?.nama}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportPDFPM = async () => {
+    const element = document.getElementById('printable-pm-report');
+    if (!element || !selectedLks) return;
+    setIsGenerating(true);
+    const options = {
+      margin: 10,
+      filename: `Laporan_PM_${selectedLks.nama}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+    try {
+      element.classList.remove('hidden');
+      await html2pdf().set(options).from(element).save();
+      element.classList.add('hidden');
+      if (onNotify) onNotify('Export PDF', selectedLks.nama);
+    } catch (err) {
+      alert('Gagal membuat PDF');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleOpenEdit = (pm: PMType) => {
     setFormData(pm);
     const lks = lksData.find(l => l.id === pm.lksId);
@@ -143,33 +195,26 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
       alert('Nama, NIK, dan Lembaga (LKS) wajib diisi.');
       return;
     }
+    const finalData = {
+      ...formData,
+      asalKabKota: formData.asalKabKota || 'Blora',
+      alamat: `${formData.asalDesa || '-'}, ${formData.asalKecamatan || '-'}, ${formData.asalKabKota || 'Blora'}`,
+    } as PMType;
+
     if (formData.id) {
-      setPmData(prev => prev.map(p => p.id === formData.id ? { 
-        ...p, 
-        ...(formData as PMType),
-        alamat: `${formData.asalDesa}, ${formData.asalKecamatan}, ${formData.asalKabKota}`
-      } : p));
-      if (onNotify) onNotify('Mengupdate PM', formData.nama || 'Data PM');
+      setPmData(prev => prev.map(p => p.id === formData.id ? finalData : p));
+      if (onNotify) onNotify('Update PM', finalData.nama);
     } else {
-      const pmToAdd: PMType = {
+      const pmToAdd = {
+        ...finalData,
         id: Math.random().toString(36).substr(2, 9),
-        ...(formData as PMType),
-        alamat: `${formData.asalDesa}, ${formData.asalKecamatan}, ${formData.asalKabKota}`,
         jenisBantuan: lksData.find(l => l.id === formData.lksId)?.jenisBantuan || 'Umum'
       };
       setPmData(prev => [pmToAdd, ...prev]);
-      if (onNotify) onNotify('Menambah PM', pmToAdd.nama);
+      if (onNotify) onNotify('Tambah PM', pmToAdd.nama);
     }
     setIsAdding(false);
     resetForm();
-  };
-
-  const handleConfirmDelete = () => {
-    if (deleteConfirmPm) {
-      setPmData(prev => prev.filter(p => p.id !== deleteConfirmPm.id));
-      if (onNotify) onNotify('Menghapus PM', deleteConfirmPm.nama);
-      setDeleteConfirmPm(null);
-    }
   };
 
   const resetForm = () => {
@@ -182,86 +227,9 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     setShowLksDropdown(false);
   };
 
-  const handleExportCSVPM = () => {
-    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir", "Umur", "JK", "KabKota", "Kecamatan", "Desa", "Kategori"];
-    const rows = pmData.map(p => {
-      const lks = lksData.find(l => l.id === p.lksId)?.nama || '-';
-      return [`"${p.nama}"`, `"${lks}"`, `"${p.nik}"`, `"${p.noKK || ''}"`, `"${p.tempatLahir || ''}"`, `"${p.tanggalLahir || ''}"`, `"${p.umur || ''}"`, `"${p.jenisKelamin}"`, `"${p.asalKabKota || ''}"`, `"${p.asalKecamatan || ''}"`, `"${p.asalDesa || ''}"`, `"${p.kategori}"`];
-    });
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Data_PM_Blora.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleDownloadTemplatePM = () => {
-    const headers = ["Nama PM", "LKS", "NIK", "No KK", "Tempat Lahir", "Tgl Lahir", "Umur", "JK", "KabKota", "Kecamatan", "Desa", "Kategori"];
-    const example = ["Budi Santoso", MOCK_LKS[0].nama, "3316012345678901", "3316012345678902", "Blora", "2000-01-01", "24", "L", "Blora", "Blora", "Tempelan", "Dalam"];
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + example.join(",");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Template_Import_PM_Blora.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleImportCSVPM = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImportStatus('processing');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setTimeout(() => {
-        try {
-          const text = event.target?.result as string;
-          const lines = text.split(/\r?\n/);
-          const newEntries: PMType[] = [];
-          let skipped = 0;
-
-          for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-            if (cols.length < 3) { skipped++; continue; }
-            const [namaPM, namaLembaga, nik, noKK, tptLahir, tglLahir, umur, jk, kabKota, kec, desa, kategori] = cols;
-            const targetLks = lksData.find(l => l.nama.toLowerCase() === namaLembaga?.toLowerCase());
-            if (targetLks && namaPM && nik) {
-              newEntries.push({
-                id: Math.random().toString(36).substr(2, 9),
-                lksId: targetLks.id,
-                nama: namaPM,
-                nik: nik,
-                noKK: noKK || '',
-                tempatLahir: tptLahir || '',
-                tanggalLahir: tglLahir || '',
-                umur: parseInt(umur) || 0,
-                jenisKelamin: (jk?.toUpperCase() === 'P' ? 'P' : 'L') as 'L' | 'P',
-                asalKabKota: kabKota || 'Blora',
-                asalKecamatan: kec || '',
-                asalDesa: desa || '',
-                alamat: `${desa || ''}, ${kec || ''}, ${kabKota || 'Blora'}`,
-                jenisBantuan: targetLks.jenisBantuan,
-                kategori: (kategori?.toLowerCase() === 'luar' ? 'Luar' : 'Dalam') as PMKategori,
-                keterangan: 'Import'
-              });
-            } else { skipped++; }
-          }
-          if (newEntries.length > 0) {
-            setPmData(prev => [...newEntries, ...prev]);
-            setImportResult({ success: newEntries.length, skipped });
-            setImportStatus('success');
-          } else { setImportStatus('error'); }
-        } catch (err) { setImportStatus('error'); }
-      }, 1000);
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+  const getSortIcon = (config: SortConfig, key: string) => {
+    if (config.key !== key) return <ArrowUpDown size={14} className="opacity-30" />;
+    return config.direction === 'asc' ? <ChevronUp size={14} className="text-blue-400" /> : <ChevronDown size={14} className="text-blue-400" />;
   };
 
   const formatDate = (dateStr: string | undefined) => {
@@ -269,23 +237,15 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  const getSortIcon = (config: SortConfig, key: string) => {
-    if (config.key !== key) return <ArrowUpDown size={14} className="opacity-30" />;
-    return config.direction === 'asc' ? <ChevronUp size={14} className="text-blue-400" /> : <ChevronDown size={14} className="text-blue-400" />;
-  };
-
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-6">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-6 relative">
       <div className="bg-slate-900 rounded-[2.5rem] lg:rounded-[3rem] p-6 lg:p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 no-print">
         <div className="relative z-10">
           <h2 className="text-xl lg:text-3xl font-black mb-1 lg:mb-3 uppercase tracking-tighter">Warga Binaan (PM)</h2>
-          <p className="text-slate-400 max-w-xl text-[10px] lg:text-sm font-bold uppercase tracking-widest">Pendataan Terpadu By Name By Address.</p>
+          <p className="text-slate-400 max-w-xl text-[10px] lg:text-sm font-bold uppercase tracking-widest">Pendataan By Name By Address Kabupaten Blora.</p>
         </div>
         <div className="flex flex-wrap gap-2 lg:gap-3 relative z-10 justify-center">
-          <button onClick={handleExportCSVPM} className="bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-2">
-            <FileOutput size={16} /> EXPORT CSV
-          </button>
-          <button onClick={() => setIsImporting(true)} className="bg-indigo-50 text-indigo-600 border border-indigo-100 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-2">
+          <button onClick={() => setIsImporting(true)} className="bg-white/10 text-white border border-white/20 px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-slate-900 transition-all shadow-sm flex items-center gap-2">
             <FileInput size={16} /> IMPORT CSV
           </button>
           <button onClick={() => { resetForm(); setIsAdding(true); }} className="bg-blue-600 text-white px-4 lg:px-6 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2">
@@ -303,19 +263,13 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                <input type="text" placeholder="Cari Nama Lembaga (LKS) atau Wilayah..." className="w-full pl-14 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm" value={searchTermLks} onChange={(e) => setSearchTermLks(e.target.value)} />
             </div>
           </div>
-          <div className="hidden lg:block bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-900 text-white select-none">
-                  <th onClick={() => handleSortLks('nama')} className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer group hover:bg-slate-800 transition-colors">
-                    <div className="flex items-center gap-2">Nama Lembaga (LKS) {getSortIcon(sortLks, 'nama')}</div>
-                  </th>
-                  <th onClick={() => handleSortLks('kecamatan')} className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer group hover:bg-slate-800 transition-colors">
-                    <div className="flex items-center gap-2">Wilayah / Kecamatan {getSortIcon(sortLks, 'kecamatan')}</div>
-                  </th>
-                  <th onClick={() => handleSortLks('jumlahPM')} className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-center text-slate-400 cursor-pointer group hover:bg-slate-800 transition-colors">
-                    <div className="flex items-center justify-center gap-2">Total PM {getSortIcon(sortLks, 'jumlahPM')}</div>
-                  </th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Nama Lembaga (LKS)</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Wilayah / Kecamatan</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-center text-slate-400">Total PM</th>
                   <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-right text-slate-400">Aksi</th>
                 </tr>
               </thead>
@@ -327,7 +281,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                       <td className="px-10 py-6"><p className="font-black text-sm uppercase tracking-tight text-slate-800">{lks.nama}</p></td>
                       <td className="px-10 py-6"><p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={14} className="text-blue-500" /> {lks.kecamatan}</p></td>
                       <td className="px-10 py-6 text-center"><span className="px-4 py-2 rounded-xl text-xs font-black bg-slate-100 text-slate-700">{pmCount} PM</span></td>
-                      <td className="px-10 py-6 text-right"><div className="flex items-center justify-end font-black text-[10px] uppercase tracking-widest gap-2 opacity-0 group-hover:opacity-100 transition-all text-blue-600">Lihat Daftar <ChevronRight size={16} /></div></td>
+                      <td className="px-10 py-6 text-right"><div className="flex items-center justify-end font-black text-[10px] uppercase tracking-widest gap-2 opacity-0 group-hover:opacity-100 transition-all text-blue-600">Buka Daftar <ChevronRight size={16} /></div></td>
                     </tr>
                   );
                 })}
@@ -339,69 +293,99 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
             <div className="flex items-center gap-4">
-              <button onClick={() => { setSelectedLksId(null); setSearchTerm(''); }} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all shadow-sm"><ArrowLeft size={20} /></button>
+              <button onClick={() => { setSelectedLksId(null); setSearchTerm(''); setSelectedPmIds(new Set()); }} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all shadow-sm"><ArrowLeft size={20} /></button>
               <div>
                 <h3 className="font-black text-slate-800 text-xl leading-tight uppercase tracking-tight">{selectedLks?.nama}</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Total {filteredPm.length} Penerima Manfaat</p>
               </div>
             </div>
+            
             <div className="flex items-center gap-3">
+              {selectedPmIds.size > 0 ? (
+                <button 
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  className="bg-rose-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-rose-600/20 flex items-center gap-2 animate-in zoom-in-95"
+                >
+                  <Trash2 size={16} /> Hapus {selectedPmIds.size} Data
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                   <button onClick={handleExportExcelPM} className="p-2.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-2 font-black text-[9px] uppercase"><FileSpreadsheet size={16} /> EXCEL</button>
+                   <button onClick={handleExportPDFPM} disabled={isGenerating} className="p-2.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm flex items-center gap-2 font-black text-[9px] uppercase">
+                     {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />} PDF
+                   </button>
+                </div>
+              )}
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input type="text" placeholder="Cari Nama / NIK..." className="pl-10 pr-4 py-2.5 bg-white border rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </div>
+
           <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden no-print">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-slate-900 text-white select-none">
                   <tr>
-                    <th onClick={() => handleSortPm('nama')} className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer group hover:bg-slate-800 transition-colors">
-                      <div className="flex items-center gap-2">Penerima Manfaat {getSortIcon(sortPm, 'nama')}</div>
+                    <th className="px-6 py-6 w-12 text-center">
+                      <button onClick={handleToggleSelectAll} className="text-white hover:text-blue-400 transition-colors">
+                        {selectedPmIds.size === filteredPm.length && filteredPm.length > 0 ? <CheckSquare size={20} /> : <Square size={20} />}
+                      </button>
                     </th>
-                    <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Usia / JK</th>
-                    <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Asal Wilayah</th>
-                    <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Keberadaan</th>
+                    <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Penerima Manfaat</th>
+                    <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">TTL / Usia</th>
+                    <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">JK</th>
+                    <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Asal Wilayah</th>
+                    <th className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Kategori</th>
                     <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-right text-slate-400">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredPm.map((pm) => (
-                    <tr key={pm.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="px-8 py-6">
+                    <tr key={pm.id} className={`transition-colors group ${selectedPmIds.has(pm.id) ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}>
+                      <td className="px-6 py-6 text-center">
+                        <button onClick={() => handleToggleSelectPm(pm.id)} className={`${selectedPmIds.has(pm.id) ? 'text-blue-600' : 'text-slate-300'}`}>
+                           {selectedPmIds.has(pm.id) ? <CheckSquare size={20} /> : <Square size={20} />}
+                        </button>
+                      </td>
+                      <td className="px-6 py-6">
                         <button onClick={() => setViewingPm(pm)} className="font-black text-slate-800 text-sm uppercase hover:text-blue-600 transition-all text-left block leading-tight">{pm.nama}</button>
                         <p className="text-[10px] text-slate-400 font-bold mt-1 tracking-tighter">NIK: {pm.nik}</p>
+                        <p className="text-[9px] text-slate-400 font-bold">KK: {pm.noKK || '-'}</p>
                       </td>
-                      <td className="px-8 py-6">
-                        <p className="text-sm font-black text-slate-700 leading-none">{pm.umur || '-'} Thn</p>
-                        <span className={`text-[9px] font-black uppercase ${pm.jenisKelamin === 'L' ? 'text-blue-500' : 'text-rose-500'}`}>
+                      <td className="px-6 py-6">
+                        <p className="text-[10px] font-black text-slate-700 uppercase leading-none">{pm.tempatLahir || '-'}, {formatDate(pm.tanggalLahir)}</p>
+                        <p className="text-[11px] font-black text-slate-900 mt-1">{pm.umur || '0'} Tahun</p>
+                      </td>
+                      <td className="px-6 py-6">
+                        <span className={`text-[9px] font-black uppercase inline-block px-2 py-1 rounded-lg ${pm.jenisKelamin === 'L' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}`}>
                           {pm.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
                         </span>
                       </td>
-                      <td className="px-8 py-6">
+                      <td className="px-6 py-6">
                          <p className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-1.5 truncate max-w-[150px]">
                             <MapPin size={12} className="text-rose-500" /> {pm.asalDesa || '-'}
                          </p>
                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-4">{pm.asalKecamatan || '-'}</p>
                       </td>
-                      <td className="px-8 py-6 text-center">
+                      <td className="px-6 py-6 text-center">
                         <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${pm.kategori === 'Dalam' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
                           {pm.kategori}
                         </span>
                       </td>
                       <td className="px-8 py-6 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => setViewingPm(pm)} className="p-2.5 bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white rounded-xl transition-all"><Eye size={18} /></button>
-                          <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Edit3 size={18} /></button>
-                          <button onClick={() => setDeleteConfirmPm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all"><Trash2 size={18} /></button>
+                          <button onClick={() => setViewingPm(pm)} className="p-2.5 bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white rounded-xl transition-all" title="Detail"><Eye size={18} /></button>
+                          <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all" title="Edit"><Edit3 size={18} /></button>
+                          <button onClick={() => { setDeleteConfirmPm(pm); setSelectedPmIds(new Set()); }} className="p-2.5 text-slate-300 hover:text-red-600 transition-all" title="Hapus"><Trash2 size={18} /></button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {filteredPm.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-20 text-center text-slate-300 italic font-medium">Data PM tidak ditemukan untuk lembaga ini.</td>
+                      <td colSpan={7} className="py-20 text-center text-slate-300 italic font-medium">Data PM tidak ditemukan.</td>
                     </tr>
                   )}
                 </tbody>
@@ -410,6 +394,55 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
           </div>
         </div>
       )}
+
+      {/* PDF PRINT SURFACE (HIDDEN) */}
+      <div id="printable-pm-report" className="hidden p-12 bg-white text-black arial-force">
+         <div className="text-center mb-8 border-b-4 border-double border-black pb-4">
+            <h1 className="text-xl font-bold uppercase arial-force">PEMERINTAH KABUPATEN BLORA</h1>
+            <h2 className="text-2xl font-black uppercase arial-force">DINAS SOSIAL PEMBERDAYAAN PEREMPUAN DAN PERLINDUNGAN ANAK</h2>
+            <div className="mt-6 pt-4 border-t border-black">
+               <h3 className="text-lg font-bold underline uppercase arial-force">LAPORAN DATA PENERIMA MANFAAT (WARGA BINAAN)</h3>
+               <p className="text-[10pt] font-black uppercase mt-1">LEMBAGA: {selectedLks?.nama}</p>
+            </div>
+         </div>
+         <table className="w-full text-[8pt] border-collapse border border-black">
+            <thead>
+               <tr className="bg-slate-100 uppercase">
+                  <th className="border border-black p-2">No</th>
+                  <th className="border border-black p-2">Nama Lengkap</th>
+                  <th className="border border-black p-2">NIK / No. KK</th>
+                  <th className="border border-black p-2">TTL</th>
+                  <th className="border border-black p-2">Usia</th>
+                  <th className="border border-black p-2">JK</th>
+                  <th className="border border-black p-2">Asal Wilayah</th>
+                  <th className="border border-black p-2">Kategori</th>
+               </tr>
+            </thead>
+            <tbody>
+               {filteredPm.map((pm, idx) => (
+                  <tr key={pm.id}>
+                     <td className="border border-black p-2 text-center">{idx + 1}</td>
+                     <td className="border border-black p-2 font-bold uppercase">{pm.nama}</td>
+                     <td className="border border-black p-2">{pm.nik} / {pm.noKK || '-'}</td>
+                     <td className="border border-black p-2 uppercase">{pm.tempatLahir || '-'}, {formatDate(pm.tanggalLahir)}</td>
+                     <td className="border border-black p-2 text-center">{pm.umur} Thn</td>
+                     <td className="border border-black p-2 text-center">{pm.jenisKelamin}</td>
+                     <td className="border border-black p-2 uppercase">{pm.asalDesa}, {pm.asalKecamatan}, {pm.asalKabKota || 'Blora'}</td>
+                     <td className="border border-black p-2 text-center uppercase font-bold">{pm.kategori}</td>
+                  </tr>
+               ))}
+            </tbody>
+         </table>
+         <div className="mt-10 flex justify-end">
+            <div className="text-center w-72 arial-force">
+               <p>Blora, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+               <p>Administrator SI-LKS,</p>
+               <div className="h-20"></div>
+               <p className="font-bold underline">Sistem Informasi LKS</p>
+               <p className="text-[8pt]">Kabupaten Blora</p>
+            </div>
+         </div>
+      </div>
 
       {/* MODAL VIEW DETAIL PM */}
       {viewingPm && (
@@ -421,34 +454,35 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                   <div className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg"><User size={28}/></div>
                   <div>
                     <h3 className="font-black text-slate-800 text-xl uppercase leading-tight">{viewingPm.nama}</h3>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">Detail Data Warga Binaan</p>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">Profil Penerima Manfaat</p>
                   </div>
                 </div>
                 <button onClick={() => setViewingPm(null)} className="p-2 text-slate-400 hover:bg-white rounded-xl"><X size={24}/></button>
              </div>
-             <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh] no-scrollbar">
-                <div className="grid grid-cols-2 gap-8">
-                   <DetailRow label="NIK (KTP)" value={viewingPm.nik} />
-                   <DetailRow label="NO. KARTU KELUARGA" value={viewingPm.noKK || '-'} />
-                   <DetailRow label="TEMPAT LAHIR" value={viewingPm.tempatLahir || '-'} />
-                   <DetailRow label="TANGGAL LAHIR" value={formatDate(viewingPm.tanggalLahir)} />
-                   <DetailRow label="USIA" value={`${viewingPm.umur || '-'} TAHUN`} />
-                   <DetailRow label="JENIS KELAMIN" value={viewingPm.jenisKelamin === 'L' ? 'LAKI-LAKI' : 'PEREMPUAN'} />
-                   <div className="col-span-2">
-                      <DetailRow label="ALAMAT LENGKAP ASAL" value={viewingPm.alamat || '-'} />
-                   </div>
-                   <DetailRow label="KATEGORI" value={viewingPm.kategori === 'Dalam' ? 'DALAM PANTI (RESIDENSIAL)' : 'LUAR PANTI (NON-RESIDENSIAL)'} />
-                   <DetailRow label="LEMBAGA (LKS)" value={lksData.find(l => l.id === viewingPm.lksId)?.nama || '-'} />
+             <div className="p-10 space-y-6 overflow-y-auto max-h-[70vh] no-scrollbar">
+                <div className="grid grid-cols-2 gap-6">
+                   <DetailRow label="NIK" value={viewingPm.nik} />
+                   <DetailRow label="No. KK" value={viewingPm.noKK || '-'} />
+                   <DetailRow label="Tempat Lahir" value={viewingPm.tempatLahir || '-'} />
+                   <DetailRow label="Tgl Lahir" value={formatDate(viewingPm.tanggalLahir)} />
+                   <DetailRow label="Usia" value={`${viewingPm.umur || '0'} TAHUN`} />
+                   <DetailRow label="Jenis Kelamin" value={viewingPm.jenisKelamin === 'L' ? 'LAKI-LAKI' : 'PEREMPUAN'} />
+                   <DetailRow label="Kategori" value={viewingPm.kategori === 'Dalam' ? 'DALAM PANTI' : 'LUAR PANTI'} />
+                   <DetailRow label="Kabupaten" value={viewingPm.asalKabKota || 'Blora'} />
                 </div>
                 <div className="pt-6 border-t">
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">KETERANGAN TAMBAHAN</p>
-                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-600 italic">
-                      {viewingPm.keterangan || 'Tidak ada catatan tambahan.'}
-                   </div>
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Domisili Asal</p>
+                   <p className="text-sm font-bold text-slate-800 uppercase leading-relaxed">
+                    Desa {viewingPm.asalDesa || '-'}, Kec. {viewingPm.asalKecamatan || '-'}
+                   </p>
+                </div>
+                <div className="pt-4">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Keterangan</p>
+                   <p className="text-xs text-slate-600 italic">{viewingPm.keterangan || 'Tidak ada catatan.'}</p>
                 </div>
              </div>
              <div className="p-8 bg-slate-50 border-t flex gap-4">
-                <button onClick={() => handleOpenEdit(viewingPm)} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"><Edit3 size={16}/> EDIT DATA</button>
+                <button onClick={() => handleOpenEdit(viewingPm)} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"><Edit3 size={16}/> EDIT</button>
                 <button onClick={() => setViewingPm(null)} className="flex-1 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase">TUTUP</button>
              </div>
           </div>
@@ -469,14 +503,18 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                 <button type="button" onClick={() => setIsAdding(false)} className="p-2 text-slate-400"><X size={24}/></button>
               </div>
               <div className="flex-1 overflow-y-auto p-6 lg:p-12 space-y-10 no-scrollbar">
-                <section className="space-y-6">
-                   <h4 className="text-[10px] font-black text-blue-600 uppercase border-b-2 border-blue-100 pb-2 flex items-center gap-2"><Info size={16}/> Data Kependudukan</h4>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nama Lengkap</label><input type="text" required value={formData.nama} onChange={e=>setFormData({...formData, nama: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Nama sesuai KTP" /></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <div className="space-y-6">
+                      <h4 className="text-[10px] font-black text-blue-600 uppercase border-b pb-2 tracking-widest">Identitas Kependudukan</h4>
+                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nama Lengkap</label><input type="text" required value={formData.nama} onChange={e=>setFormData({...formData, nama: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">NIK</label><input type="text" required value={formData.nik} onChange={e=>setFormData({...formData, nik: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" maxLength={16} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nomor KK</label><input type="text" value={formData.noKK} onChange={e=>setFormData({...formData, noKK: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" maxLength={16} /></div>
+                      </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Lembaga Pengampu (LKS)</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Lembaga (LKS) Pengampu</label>
                         <div className="relative">
-                           <input type="text" autoComplete="off" value={lksSearchTerm} onChange={e => {setLksSearchTerm(e.target.value); setShowLksDropdown(true);}} onFocus={() => setShowLksDropdown(true)} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Cari Nama LKS..." />
+                           <input type="text" autoComplete="off" value={lksSearchTerm} onChange={e => {setLksSearchTerm(e.target.value); setShowLksDropdown(true);}} onFocus={() => setShowLksDropdown(true)} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" placeholder="Cari LKS..." />
                            {showLksDropdown && (
                              <div className="absolute top-full left-0 right-0 mt-2 bg-white border rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto no-scrollbar py-2">
                                 {lksData.filter(l => l.nama.toLowerCase().includes(lksSearchTerm.toLowerCase())).map(l => (
@@ -486,108 +524,93 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                            )}
                         </div>
                       </div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">NIK (16 Digit)</label><input type="text" required value={formData.nik} onChange={e=>setFormData({...formData, nik: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" maxLength={16} /></div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nomor Kartu Keluarga</label><input type="text" value={formData.noKK} onChange={e=>setFormData({...formData, noKK: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" maxLength={16} /></div>
-                   </div>
-                </section>
-                <section className="space-y-6">
-                   <h4 className="text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-100 pb-2 flex items-center gap-2"><Calendar size={16}/> Kelahiran & Domisili</h4>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Tempat Lahir</label><input type="text" value={formData.tempatLahir} onChange={e=>setFormData({...formData, tempatLahir: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Tgl Lahir</label><input type="date" value={formData.tanggalLahir} onChange={e=>setFormData({...formData, tanggalLahir: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
                       <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Jenis Kelamin</label><select value={formData.jenisKelamin} onChange={e=>setFormData({...formData, jenisKelamin: e.target.value as any})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kecamatan Asal</label><select value={formData.asalKecamatan} onChange={e=>setFormData({...formData, asalKecamatan: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold"><option value="">-- Pilih --</option>{KECAMATAN_BLORA.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Desa/Kel Asal</label><input type="text" value={formData.asalDesa} onChange={e=>setFormData({...formData, asalDesa: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kategori</label><select value={formData.kategori} onChange={e=>setFormData({...formData, kategori: e.target.value as any})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold"><option value="Dalam">Dalam Panti</option><option value="Luar">Luar Panti</option></select></div>
                    </div>
-                </section>
+                   <div className="space-y-6">
+                      <h4 className="text-[10px] font-black text-indigo-600 uppercase border-b pb-2 tracking-widest">Kelahiran & Domisili</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Tempat Lahir</label><input type="text" value={formData.tempatLahir} onChange={e=>setFormData({...formData, tempatLahir: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Tgl Lahir</label><input type="date" value={formData.tanggalLahir} onChange={e=>setFormData({...formData, tanggalLahir: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold text-blue-600" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Usia (Otomatis)</label><div className="w-full px-5 py-4 bg-slate-100 border rounded-2xl font-black text-slate-800">{formData.umur || '0'} Tahun</div></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kabupaten</label><input type="text" value={formData.asalKabKota} onChange={e=>setFormData({...formData, asalKabKota: e.target.value})} className="w-full px-5 py-4 bg-slate-100 border rounded-2xl font-bold" readOnly /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kecamatan Asal</label><select value={formData.asalKecamatan} onChange={e=>setFormData({...formData, asalKecamatan: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold"><option value="">-- Pilih --</option>{KECAMATAN_BLORA.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Desa Asal</label><input type="text" value={formData.asalDesa} onChange={e=>setFormData({...formData, asalDesa: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold" /></div>
+                      </div>
+                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-1">Status Keberadaan</label><select value={formData.kategori} onChange={e=>setFormData({...formData, kategori: e.target.value as any})} className="w-full px-5 py-4 bg-slate-50 border rounded-2xl font-bold"><option value="Dalam">Dalam Panti</option><option value="Luar">Luar Panti</option></select></div>
+                   </div>
+                </div>
               </div>
               <div className="p-8 bg-slate-50 border-t flex justify-end gap-4">
                  <button type="button" onClick={() => setIsAdding(false)} className="px-8 py-4 text-slate-400 font-black text-xs uppercase tracking-widest">Batal</button>
-                 <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center gap-2"><Save size={18}/> Simpan Data PM</button>
+                 <button type="submit" className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-2"><Save size={18}/> Simpan Data PM</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* POPUP PROGRES IMPORT */}
-      {importStatus !== 'idle' && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl"></div>
-          <div className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 text-center shadow-2xl animate-in zoom-in-95">
-             {importStatus === 'processing' ? (
-               <div className="space-y-6">
-                 <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner">
-                    <RefreshCw size={36} className="animate-spin" />
-                 </div>
-                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Memproses Data...</h3>
-                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Mohon tunggu, sedang menvalidasi BNBA.</p>
-               </div>
-             ) : importStatus === 'success' ? (
-               <div className="space-y-6">
-                 <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner">
-                    <CheckCircle2 size={40} />
-                 </div>
-                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Import Selesai!</h3>
-                 <div className="bg-slate-50 p-4 rounded-2xl text-left border border-slate-100">
-                    <p className="text-[10px] font-black text-emerald-600 uppercase mb-1 flex items-center gap-2"><CheckCircle size={14}/> {importResult.success} Berhasil</p>
-                    <p className="text-[10px] font-black text-rose-500 uppercase flex items-center gap-2"><X size={14}/> {importResult.skipped} Dilewati</p>
-                 </div>
-                 <button onClick={() => { setImportStatus('idle'); setIsImporting(false); }} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest">LANJUTKAN</button>
-               </div>
-             ) : (
-               <div className="space-y-6">
-                 <div className="w-20 h-20 bg-rose-50 text-rose-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner">
-                    <AlertTriangle size={40} />
-                 </div>
-                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Gagal Import</h3>
-                 <p className="text-slate-500 text-xs font-bold leading-relaxed uppercase tracking-widest">File tidak dapat dibaca atau format kolom salah.</p>
-                 <button onClick={() => setImportStatus('idle')} className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest">COBA LAGI</button>
-               </div>
-             )}
+      {/* MODAL KONFIRMASI HAPUS MASSAL */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsBulkDeleteModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center shadow-2xl animate-in zoom-in-95">
+             <div className="w-20 h-20 mx-auto bg-rose-50 text-rose-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={40} /></div>
+             <h3 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">Hapus Massal?</h3>
+             <p className="text-xs text-slate-400 font-bold uppercase mb-8">Anda akan menghapus <span className="text-rose-600">{selectedPmIds.size}</span> data Penerima Manfaat secara permanen.</p>
+             <div className="flex gap-4">
+                <button onClick={() => setIsBulkDeleteModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[10px] uppercase">Batal</button>
+                <button onClick={handleBulkDelete} className="flex-1 py-4 bg-rose-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg">Ya, Hapus Semua</button>
+             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL IMPORT SELECTION */}
-      {isImporting && importStatus === 'idle' && (
+      {/* MODAL HAPUS SATUAN */}
+      {deleteConfirmPm && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmPm(null)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center shadow-2xl animate-in zoom-in-95">
+             <div className="w-20 h-20 mx-auto bg-slate-50 text-slate-400 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><Trash2 size={40} /></div>
+             <h3 className="text-xl font-black text-slate-900 mb-2 uppercase">Hapus Data?</h3>
+             <p className="text-xs text-slate-400 font-bold uppercase mb-8">Data {deleteConfirmPm.nama} akan dihapus.</p>
+             <div className="flex gap-4">
+                <button onClick={() => setDeleteConfirmPm(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[10px] uppercase">Batal</button>
+                <button onClick={() => {
+                  setPmData(prev => prev.filter(p => p.id !== deleteConfirmPm.id));
+                  if (onNotify) onNotify('Hapus PM', deleteConfirmPm.nama);
+                  setDeleteConfirmPm(null);
+                }} className="flex-1 py-4 bg-rose-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg">Hapus</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* IMPORT MODAL */}
+      {isImporting && (
         <div className="fixed inset-0 z-[700] flex items-center justify-center p-4 no-print">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsImporting(false)}></div>
           <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 text-center animate-in zoom-in-95">
              <div className="w-20 h-20 mx-auto bg-indigo-50 text-indigo-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><Upload size={36} /></div>
              <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter uppercase">Import Batch PM</h3>
-             <button onClick={handleDownloadTemplatePM} className="w-full mb-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 transition-all"><Download size={14} /> UNDUH TEMPLATE CSV</button>
+             <p className="text-slate-400 text-[10px] font-bold uppercase mb-8">Pilih file CSV dengan format BNBA yang sesuai.</p>
              <div className="flex gap-2">
-                <button onClick={() => setIsImporting(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-widest">BATAL</button>
+                <button onClick={() => setIsImporting(false)} className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-xs uppercase">Batal</button>
                 <label className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase shadow-lg cursor-pointer flex items-center justify-center gap-2">
-                   <FileSpreadsheet size={18} /> PILIH CSV
-                   <input type="file" accept=".csv" className="hidden" onChange={handleImportCSVPM} />
+                   <FileSpreadsheet size={18} /> Pilih File
+                   <input type="file" accept=".csv" className="hidden" />
                 </label>
              </div>
           </div>
         </div>
       )}
 
-      {/* MODAL HAPUS PM */}
-      {deleteConfirmPm && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setDeleteConfirmPm(null)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[3rem] p-10 text-center shadow-2xl animate-in zoom-in-95">
-             <div className="w-20 h-20 mx-auto bg-red-50 text-red-600 rounded-[2.5rem] flex items-center justify-center mb-6 shadow-inner"><AlertTriangle size={40} /></div>
-             <h3 className="text-xl font-black text-slate-900 mb-2 uppercase">Hapus Data PM?</h3>
-             <p className="text-xs text-slate-400 font-bold uppercase mb-8">Data {deleteConfirmPm.nama} akan dihapus permanen.</p>
-             <div className="flex gap-4">
-                <button onClick={() => setDeleteConfirmPm(null)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-xl font-black text-[10px] uppercase">Batal</button>
-                <button onClick={handleConfirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase shadow-lg">Hapus</button>
-             </div>
-          </div>
-        </div>
-      )}
-
       <style>{`
-        .arial-force { font-family: Arial, sans-serif !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .arial-force { font-family: Arial, sans-serif !important; }
       `}</style>
     </div>
   );
