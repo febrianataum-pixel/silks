@@ -26,6 +26,8 @@ interface Notification {
   isRead: boolean;
 }
 
+const APP_VERSION = "v1.2.4-stable";
+
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -239,7 +241,10 @@ const App: React.FC = () => {
             ))}
           </nav>
           <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-            <button onClick={handleLogout} className={`flex items-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl ${isSidebarCollapsed ? 'justify-center w-full py-4' : 'px-4 py-3 gap-3 w-full'}`}><LogOut size={20} />{!isSidebarCollapsed && <span className="font-bold text-sm">Keluar Sesi</span>}</button>
+            <button onClick={handleLogout} className={`flex items-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl mb-2 ${isSidebarCollapsed ? 'justify-center w-full py-4' : 'px-4 py-3 gap-3 w-full'}`}><LogOut size={20} />{!isSidebarCollapsed && <span className="font-bold text-sm">Keluar Sesi</span>}</button>
+            <div className={`px-4 pt-2 flex ${isSidebarCollapsed ? 'justify-center' : 'justify-start'}`}>
+               <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none select-none">{APP_VERSION}</span>
+            </div>
           </div>
         </div>
       </aside>
