@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle, SearchCode, Filter } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
 import AdministrasiPage from './pages/Administrasi';
 import PenerimaManfaatPage from './pages/PenerimaManfaat';
+import AdvancedSearchPage from './pages/AdvancedSearch';
 import RekomendasiPage from './pages/Rekomendasi';
 import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
@@ -15,7 +16,7 @@ import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './typ
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
-type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'rekomendasi' | 'profile';
+type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'pencarian' | 'rekomendasi' | 'profile';
 
 interface Notification {
   id: string;
@@ -26,7 +27,7 @@ interface Notification {
   isRead: boolean;
 }
 
-const APP_VERSION = "v1.2.4-stable";
+const APP_VERSION = "v1.3.0-stable";
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<Page>('dashboard');
@@ -231,6 +232,7 @@ const App: React.FC = () => {
               { id: 'lks', label: 'Data LKS', icon: <Building2 size={20} /> },
               { id: 'administrasi', label: 'Administrasi', icon: <ClipboardList size={20} /> },
               { id: 'pm', label: 'Penerima Manfaat', icon: <Users size={20} /> },
+              { id: 'pencarian', label: 'Pencarian PM', icon: <Filter size={20} /> },
               { id: 'rekomendasi', label: 'Rekomendasi', icon: <FileText size={20} /> },
               { id: 'profile', label: 'Profil Saya', icon: <UserCircle size={20} /> },
             ].map((item) => (
@@ -315,6 +317,7 @@ const App: React.FC = () => {
             {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={addNotification} appLogo={appLogo} />}
             {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={addNotification} />}
             {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} initialSelectedPmId={navContext?.type === 'PM' ? navContext.id : undefined} onNotify={addNotification} />}
+            {activePage === 'pencarian' && <AdvancedSearchPage lksData={lksData} pmData={pmData} />}
             {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={addNotification} appLogo={appLogo} />}
             {activePage === 'profile' && currentUser && (
               <ProfilePage 
@@ -337,13 +340,13 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* MOBILE BOTTOM NAVIGATION - Semua Menu Terpusat di Sini */}
+        {/* MOBILE BOTTOM NAVIGATION */}
         <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-4 lg:hidden z-[100] no-print shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.1)] rounded-t-[2.5rem]">
           {[
             { id: 'dashboard', icon: <LayoutDashboard size={24} /> },
             { id: 'lks', icon: <Building2 size={24} /> },
-            { id: 'administrasi', icon: <ClipboardList size={24} /> },
             { id: 'pm', icon: <Users size={24} /> },
+            { id: 'pencarian', icon: <Filter size={24} /> },
             { id: 'profile', icon: <UserCircle size={24} /> },
           ].map((item) => (
             <button 

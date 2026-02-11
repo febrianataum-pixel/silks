@@ -5,7 +5,7 @@ import {
   Printer, ArrowLeft, Upload, FileSpreadsheet, Download, 
   Info, AlertCircle, CheckCircle2, X, Plus, Loader2, 
   UserPlus, Calendar, Home, Globe, Hash, Landmark, Save, Edit3,
-  FileText, Filter, CheckCircle, Building2, FileOutput, FileInput, AlertTriangle
+  FileText, Filter, CheckCircle, Building2, FileOutput, FileInput, AlertTriangle, Eye
 } from 'lucide-react';
 import { LKS, PenerimaManfaat as PMType, PMKategori } from '../types';
 import { KECAMATAN_BLORA } from '../constants';
@@ -27,6 +27,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
   const [categoryFilter, setCategoryFilter] = useState<'Semua' | PMKategori>('Semua');
   const [isImporting, setIsImporting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [viewingPm, setViewingPm] = useState<PMType | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [deleteConfirmPm, setDeleteConfirmPm] = useState<PMType | null>(null);
   
@@ -125,6 +126,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     const lks = lksData.find(l => l.id === pm.lksId);
     setLksSearchTerm(lks?.nama || '');
     setIsAdding(true);
+    setViewingPm(null); // Close viewing modal if opening edit
   };
 
   const handleSavePm = (e: React.FormEvent) => {
@@ -247,6 +249,15 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     }
     
     return dateStr; // Kembalikan apa adanya jika gagal parsing
+  };
+
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   return (
@@ -425,7 +436,13 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                   {filteredPm.map((pm) => (
                     <tr key={pm.id} className={`hover:bg-slate-50 transition-colors ${initialSelectedPmId === pm.id ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-500' : ''}`}>
                       <td className="px-8 py-6">
-                        <p className="font-black text-slate-800 text-sm uppercase">{pm.nama}</p>
+                        <button 
+                          onClick={() => setViewingPm(pm)} 
+                          className="font-black text-slate-800 text-sm uppercase hover:text-blue-600 hover:underline transition-all text-left group flex items-center gap-2"
+                        >
+                          {pm.nama}
+                          <Eye size={14} className="opacity-0 group-hover:opacity-100 text-blue-400 transition-opacity" />
+                        </button>
                         <p className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1.5 mt-1">
                           <MapPin size={12} className="text-rose-500" /> {pm.asalDesa}, {pm.asalKecamatan}
                         </p>
@@ -441,10 +458,10 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                       </td>
                       <td className="px-8 py-6 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                          <button onClick={() => handleOpenEdit(pm)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Edit Data">
                             <Edit3 size={18} />
                           </button>
-                          <button onClick={() => setDeleteConfirmPm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all">
+                          <button onClick={() => setDeleteConfirmPm(pm)} className="p-2.5 text-slate-300 hover:text-red-600 transition-all" title="Hapus Data">
                             <Trash2 size={18} />
                           </button>
                         </div>
@@ -456,6 +473,94 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETAIL PM (VIEW MODE) */}
+      {viewingPm && (
+        <div className="fixed inset-0 z-[900] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setViewingPm(null)}></div>
+          <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="px-10 py-8 bg-slate-900 text-white flex items-center justify-between">
+               <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg"><User size={32} /></div>
+                  <div>
+                    <h3 className="text-2xl font-black uppercase tracking-tighter leading-tight">{viewingPm.nama}</h3>
+                    <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Profil Penerima Manfaat</p>
+                  </div>
+               </div>
+               <button onClick={() => setViewingPm(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X size={24} /></button>
+            </div>
+
+            <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh] no-scrollbar">
+               {/* Identity Card Section */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                     <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2 flex items-center gap-2"><Hash size={14}/> Nomor Identitas</h4>
+                     <DetailRow label="NIK (Nomor Induk Kependudukan)" value={viewingPm.nik} />
+                     <DetailRow label="Nomor Kartu Keluarga (KK)" value={viewingPm.noKK || '-'} />
+                  </div>
+                  <div className="space-y-4">
+                     <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-b pb-2 flex items-center gap-2"><Calendar size={14}/> Kelahiran & Gender</h4>
+                     <DetailRow label="Tempat, Tanggal Lahir" value={`${viewingPm.tempatLahir || '-'}, ${formatDate(viewingPm.tanggalLahir)}`} />
+                     <div className="flex justify-between items-end">
+                        <DetailRow label="Jenis Kelamin" value={viewingPm.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'} />
+                        <div className="px-4 py-2 bg-slate-100 rounded-xl text-sm font-black text-slate-700">{viewingPm.umur} TAHUN</div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Origin & Location */}
+               <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest border-b pb-2 flex items-center gap-2"><MapPin size={14}/> Alamat Asal (Domisili Asli)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <DetailRow label="Kabupaten/Kota" value={viewingPm.asalKabKota || 'Blora'} />
+                     <DetailRow label="Kecamatan" value={viewingPm.asalKecamatan || '-'} />
+                     <DetailRow label="Desa/Kelurahan" value={viewingPm.asalDesa || '-'} />
+                  </div>
+               </div>
+
+               {/* Institutional Info */}
+               <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  <div className="space-y-1">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lembaga Pengampu (LKS)</p>
+                     <p className="text-sm font-black text-slate-800 uppercase flex items-center gap-2">
+                        <Building2 size={16} className="text-blue-500" />
+                        {lksData.find(l => l.id === viewingPm.lksId)?.nama || '-'}
+                     </p>
+                  </div>
+                  <div className="flex flex-col md:items-end">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Keberadaan</p>
+                     <span className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm ${viewingPm.kategori === 'Dalam' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                        {viewingPm.kategori === 'Dalam' ? 'Dalam Panti (Residensial)' : 'Luar Panti (Non-Residensial)'}
+                     </span>
+                  </div>
+               </div>
+
+               {/* Notes */}
+               <div className="space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Keterangan / Catatan Khusus</p>
+                  <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl text-slate-700 text-sm italic font-medium">
+                     "{viewingPm.keterangan || 'Tidak ada catatan tambahan untuk warga binaan ini.'}"
+                  </div>
+               </div>
+            </div>
+
+            <div className="p-10 bg-slate-50 border-t flex gap-4">
+               <button 
+                 onClick={() => handleOpenEdit(viewingPm)} 
+                 className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+               >
+                 <Edit3 size={18} /> EDIT DATA PROFIL
+               </button>
+               <button 
+                 onClick={() => setViewingPm(null)} 
+                 className="px-10 py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all"
+               >
+                 TUTUP
+               </button>
             </div>
           </div>
         </div>
@@ -546,7 +651,7 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
         </div>
       )}
 
-      {/* MODAL TAMBAH/EDIT PM - Tetap mengunci indikator */}
+      {/* MODAL TAMBAH/EDIT PM */}
       {isAdding && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 no-print">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsAdding(false)}></div>
@@ -866,5 +971,12 @@ const PenerimaManfaatPage: React.FC<PenerimaManfaatPageProps> = ({ lksData, pmDa
     </div>
   );
 };
+
+const DetailRow = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="space-y-1">
+    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+    <p className="text-sm font-bold text-slate-800 uppercase leading-tight">{value}</p>
+  </div>
+);
 
 export default PenerimaManfaatPage;
