@@ -9,13 +9,12 @@ import AdvancedSearchPage from './pages/AdvancedSearch';
 import RekomendasiPage from './pages/Rekomendasi';
 import ProfilePage from './pages/Profile';
 import LoginPage from './pages/Login';
-import AIChat from './AIChat'; // Import Asisten AI
 import { MOCK_LKS, MOCK_PM, MOCK_USERS } from './constants';
 import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './types';
 
 // Firebase Imports
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, collection, writeBatch, query, where, getDocs } from 'firebase/firestore';
 
 type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'pencarian' | 'rekomendasi' | 'profile';
 
@@ -77,18 +76,43 @@ const App: React.FC = () => {
   const isRemoteUpdate = useRef<boolean>(false);
   const syncTimeoutRef = useRef<any>(null);
 
+  const [storageError, setStorageError] = useState<string | null>(null);
+
   useEffect(() => {
-    localStorage.setItem('si-lks-appname', appName);
-    localStorage.setItem('si-lks-applogo', appLogo || '');
-    localStorage.setItem('si-lks-allusers', JSON.stringify(allUsers));
-    localStorage.setItem('si-lks-lksdata', JSON.stringify(lksData));
-    localStorage.setItem('si-lks-pmdata', JSON.stringify(pmData));
-    localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
-    localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
-    localStorage.setItem('si-lks-notifications', JSON.stringify(notifications));
-    if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
-    if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
+    try {
+      localStorage.setItem('si-lks-appname', appName);
+      localStorage.setItem('si-lks-applogo', appLogo || '');
+      localStorage.setItem('si-lks-allusers', JSON.stringify(allUsers));
+      localStorage.setItem('si-lks-lksdata', JSON.stringify(lksData));
+      localStorage.setItem('si-lks-pmdata', JSON.stringify(pmData));
+      localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
+      localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
+      localStorage.setItem('si-lks-notifications', JSON.stringify(notifications));
+      if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
+      if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
+      setStorageError(null);
+    } catch (err: any) {
+      console.error("Storage Error:", err);
+      if (err.name === 'QuotaExceededError' || err.code === 22) {
+        setStorageError("Memori Penyimpanan Penuh! Hapus beberapa dokumen PDF untuk menambah data baru.");
+      } else {
+        setStorageError("Gagal menyimpan data ke memori lokal.");
+      }
+    }
   }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig, notifications]);
+
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        setIsGoogleConnected(true);
+        addNotification('Koneksi', 'Google Drive Berhasil');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   useEffect(() => {
     if (!cloudConfig?.apiKey || !cloudConfig?.projectId) {
@@ -106,38 +130,58 @@ const App: React.FC = () => {
       const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       const db = getFirestore(firebaseApp);
       
-      const docRef = doc(db, 'projects', cloudConfig.projectId);
+      const projectRef = doc(db, 'projects', cloudConfig.projectId);
+      const lksCol = collection(db, 'projects', cloudConfig.projectId, 'lks');
+      const pmCol = collection(db, 'projects', cloudConfig.projectId, 'pm');
 
-      const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      // Listen to Config
+      const unsubConfig = onSnapshot(projectRef, (snapshot) => {
         if (snapshot.exists()) {
           const cloud = snapshot.data();
           isRemoteUpdate.current = true;
-          
-          if (cloud.lksData) setLksData(cloud.lksData);
-          if (cloud.pmData) setPmData(cloud.pmData);
-          if (cloud.lettersData) setLettersData(cloud.lettersData);
-          if (cloud.allUsers) setAllUsers(cloud.allUsers);
           if (cloud.appName) setAppName(cloud.appName);
           if (cloud.appLogo) setAppLogo(cloud.appLogo);
+          if (cloud.allUsers) setAllUsers(cloud.allUsers);
+          if (cloud.lettersData) setLettersData(cloud.lettersData);
           if (cloud.notifications) setNotifications(cloud.notifications.map((n:any)=>({...n, time: new Date(n.time)})));
-          
-          setSyncStatus('connected');
           setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
-        } else {
-          setSyncStatus('connected');
         }
-      }, (err) => {
-        console.error("Firestore Error:", err);
-        setSyncStatus('error');
       });
 
-      return () => unsubscribe();
+      // Listen to LKS Collection
+      const unsubLks = onSnapshot(lksCol, (snapshot) => {
+        if (!snapshot.empty) {
+          isRemoteUpdate.current = true;
+          const data = snapshot.docs.map(d => d.data() as LKS);
+          setLksData(data);
+          setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+        }
+      });
+
+      // Listen to PM Collection
+      const unsubPm = onSnapshot(pmCol, (snapshot) => {
+        if (!snapshot.empty) {
+          isRemoteUpdate.current = true;
+          const data = snapshot.docs.map(d => d.data() as PMType);
+          setPmData(data);
+          setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+        }
+      });
+
+      setSyncStatus('connected');
+
+      return () => {
+        unsubConfig();
+        unsubLks();
+        unsubPm();
+      };
     } catch (err) {
       console.error("Firebase Init Error:", err);
       setSyncStatus('error');
     }
   }, [cloudConfig]);
 
+  // Optimized Sync Logic
   useEffect(() => {
     if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
 
@@ -146,17 +190,43 @@ const App: React.FC = () => {
       setSyncStatus('syncing');
       try {
         const db = getFirestore();
-        const docRef = doc(db, 'projects', cloudConfig.projectId);
-        await setDoc(docRef, {
-          lksData, pmData, lettersData, allUsers, appName, appLogo,
+        const projectRef = doc(db, 'projects', cloudConfig.projectId);
+        
+        // Sync Config & Small Data
+        await setDoc(projectRef, {
+          appName, appLogo, allUsers, lettersData,
           notifications: notifications.map(n => ({...n, time: n.time.toISOString()})),
           lastSync: new Date().toISOString()
         }, { merge: true });
+
+        // Sync LKS (Individual Docs)
+        for (const lks of lksData) {
+          const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
+          await setDoc(lksDoc, lks, { merge: true });
+        }
+
+        // Sync PM (Individual Docs) - In a real app, we'd only sync changed ones
+        // For now, we'll do them in batches if there are many
+        const pmBatchSize = 100;
+        for (let i = 0; i < pmData.length; i += pmBatchSize) {
+          const batch = writeBatch(db);
+          const chunk = pmData.slice(i, i + pmBatchSize);
+          chunk.forEach(pm => {
+            const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
+            batch.set(pmDoc, pm, { merge: true });
+          });
+          await batch.commit();
+        }
+
         setSyncStatus('connected');
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Cloud Sync Error:", err);
         setSyncStatus('error');
+        if (err.message && err.message.includes('too large')) {
+          setStorageError("Gagal Sinkronisasi: Data terlalu besar. Hubungi pengembang.");
+        }
       }
-    }, 2000);
+    }, 5000); // Longer debounce for collection sync
 
     return () => clearTimeout(syncTimeoutRef.current);
   }, [lksData, pmData, lettersData, allUsers, appName, appLogo, notifications, syncStatus, cloudConfig]);
@@ -264,6 +334,12 @@ const App: React.FC = () => {
                     {syncStatus === 'connected' ? 'Cloud Connected' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync Error' : 'Local Mode'}
                   </p>
                 </div>
+                {storageError && (
+                  <div className="flex items-center gap-1.5 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 animate-pulse">
+                    <AlertCircle size={10} className="text-rose-500" />
+                    <p className="text-[8px] text-rose-600 font-black uppercase tracking-tighter">{storageError}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -331,9 +407,12 @@ const App: React.FC = () => {
                 setAppLogo={setAppLogo}
                 cloudConfig={cloudConfig}
                 setCloudConfig={setCloudConfig}
+                isGoogleConnected={isGoogleConnected}
                 forcePush={() => {
                   setSyncStatus('syncing');
-                  setTimeout(() => setSyncStatus('connected'), 2000);
+                  // Trigger the sync effect
+                  const db = getFirestore();
+                  setDoc(doc(db, 'projects', cloudConfig!.projectId), { lastSync: new Date().toISOString() }, { merge: true });
                 }}
               />
             )}
@@ -360,8 +439,6 @@ const App: React.FC = () => {
           ))}
         </nav>
 
-        {/* SMART ASSISTANT AI */}
-        <AIChat />
       </main>
     </div>
   );

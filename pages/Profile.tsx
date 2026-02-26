@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Shield, Trash2, UserPlus, Settings, Save, Image as ImageIcon, Camera, AlertTriangle, RefreshCw, Download, Upload, Share2, Cloud, ShieldCheck, CheckCircle2, Info, Loader2, UploadCloud } from 'lucide-react';
+import { User, Shield, Trash2, UserPlus, Settings, Save, Image as ImageIcon, Camera, AlertTriangle, RefreshCw, Download, Upload, Share2, Cloud, ShieldCheck, CheckCircle2, Info, Loader2, UploadCloud, Globe } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface ProfileProps {
@@ -15,6 +15,7 @@ interface ProfileProps {
   cloudConfig: {apiKey: string, projectId: string} | null;
   setCloudConfig: (config: {apiKey: string, projectId: string} | null) => void;
   forcePush?: () => void;
+  isGoogleConnected: boolean;
 }
 
 const Profile: React.FC<ProfileProps> = ({ 
@@ -28,7 +29,8 @@ const Profile: React.FC<ProfileProps> = ({
   setAppLogo,
   cloudConfig,
   setCloudConfig,
-  forcePush
+  forcePush,
+  isGoogleConnected
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'admin' | 'system' | 'data'>('profile');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -105,6 +107,16 @@ const Profile: React.FC<ProfileProps> = ({
     alert('Sinkronisasi Cloud Aktif!');
   };
 
+  const handleConnectGoogle = async () => {
+    try {
+      const response = await fetch('/api/auth/google/url');
+      const { url } = await response.json();
+      window.open(url, 'google_auth', 'width=600,height=700');
+    } catch (error) {
+      alert("Gagal mengambil URL autentikasi Google.");
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
       <div className="flex bg-white p-2 rounded-[2rem] border border-slate-100 shadow-sm w-fit overflow-x-auto no-scrollbar">
@@ -179,6 +191,37 @@ const Profile: React.FC<ProfileProps> = ({
                </button>
             </div>
           )}
+
+          <div className="bg-white p-10 rounded-[3.5rem] border shadow-xl max-w-4xl mt-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="flex items-center gap-6">
+                <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-inner ${isGoogleConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
+                  <Globe size={32} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight">Google Drive Storage</h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {isGoogleConnected ? 'Terhubung. Berkas akan disimpan di Google Drive Anda.' : 'Belum Terhubung. Hubungkan untuk menyimpan PDF di Google Drive.'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleConnectGoogle} 
+                className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center gap-3 ${isGoogleConnected ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white hover:bg-slate-900'}`}
+              >
+                {isGoogleConnected ? <CheckCircle2 size={18} /> : <Share2 size={18} />}
+                {isGoogleConnected ? 'TERHUBUNG' : 'HUBUNGKAN DRIVE'}
+              </button>
+            </div>
+            {!isGoogleConnected && (
+              <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
+                <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+                <p className="text-[10px] text-amber-700 font-bold uppercase leading-relaxed">
+                  PENTING: Anda perlu mengatur GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET di pengaturan aplikasi untuk mengaktifkan fitur ini.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

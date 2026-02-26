@@ -30,8 +30,10 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
 
   useEffect(() => {
-    let currentUrl: string | null = null;
-    if (previewDoc?.fileData?.startsWith('data:application/pdf')) {
+    if (previewDoc?.fileData?.startsWith('http')) {
+      setPdfUrl(previewDoc.fileData);
+      setIsLoadingPdf(false);
+    } else if (previewDoc?.fileData?.startsWith('data:application/pdf')) {
       setIsLoadingPdf(true);
       try {
         const base64Parts = previewDoc.fileData.split(',');
@@ -44,7 +46,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
         }
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: contentType });
-        currentUrl = URL.createObjectURL(blob);
+        const currentUrl = URL.createObjectURL(blob);
         setPdfUrl(currentUrl);
       } catch (e) {
         setPdfUrl(null);
@@ -55,7 +57,6 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
       setPdfUrl(null);
       setIsLoadingPdf(false);
     }
-    return () => { if (currentUrl) URL.revokeObjectURL(currentUrl); };
   }, [previewDoc]);
 
   const filteredData = data.filter(lks => {
@@ -198,7 +199,34 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
               <button onClick={() => setPreviewDoc(null)} className="p-2 text-slate-400"><X size={20} /></button>
             </div>
             <div className="flex-1 bg-slate-100 flex flex-col items-center justify-center relative">
-              {isLoadingPdf ? <Loader2 className="animate-spin text-blue-600" size={32} /> : pdfUrl ? <iframe src={`${pdfUrl}#toolbar=1`} className="w-full h-full" /> : <p className="text-slate-400 text-xs">Gagal memuat berkas.</p>}
+              {isLoadingPdf ? (
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+              ) : pdfUrl ? (
+                pdfUrl.includes('drive.google.com') ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-6">
+                    <div className="w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center text-blue-600">
+                      <FileType size={48} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-slate-800 font-black uppercase tracking-widest mb-2">Dokumen Google Drive</p>
+                      <p className="text-slate-400 text-[10px] font-bold uppercase mb-6">Pratinjau langsung mungkin dibatasi oleh browser.</p>
+                      <a 
+                        href={pdfUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all flex items-center gap-2"
+                      >
+                        <OpenIcon size={18} /> BUKA DI TAB BARU
+                      </a>
+                    </div>
+                    <iframe src={pdfUrl.replace('/view', '/preview')} className="hidden lg:block w-full max-w-4xl h-96 mt-10 rounded-2xl border-4 border-white shadow-2xl" />
+                  </div>
+                ) : (
+                  <iframe src={`${pdfUrl}#toolbar=1`} className="w-full h-full" />
+                )
+              ) : (
+                <p className="text-slate-400 text-xs">Gagal memuat berkas.</p>
+              )}
             </div>
           </div>
         </div>

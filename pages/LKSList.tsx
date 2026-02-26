@@ -88,15 +88,37 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
     });
   };
 
-  const handleFileUpload = (field: keyof LKSDocuments, file: File) => {
+  const handleFileUpload = async (field: keyof LKSDocuments, file: File) => {
     setIsUploading(field);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      handleChange(`dokumen.${field}`, base64);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/upload/google-drive', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 401) {
+          alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
+        } else {
+          throw new Error(errorData.error || "Gagal upload ke Google Drive");
+        }
+        return;
+      }
+
+      const data = await response.json();
+      // Store the view link in the document field
+      handleChange(`dokumen.${field}`, data.viewLink);
+      if (onNotify) onNotify('Upload Berkas', `${field} Berhasil`);
+    } catch (error: any) {
+      console.error("Upload Error:", error);
+      alert(error.message || "Gagal mengunggah berkas ke Google Drive.");
+    } finally {
       setIsUploading(null);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const addRiwayatBantuan = () => {
