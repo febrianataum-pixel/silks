@@ -77,32 +77,33 @@ const App: React.FC = () => {
   const syncTimeoutRef = useRef<any>(null);
   const lastSyncedLks = useRef<string>('');
   const lastSyncedPm = useRef<string>('');
+  const lastSyncedConfig = useRef<string>('');
 
   const [storageError, setStorageError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('si-lks-appname', appName);
-      localStorage.setItem('si-lks-applogo', appLogo || '');
-      localStorage.setItem('si-lks-allusers', JSON.stringify(allUsers));
-      localStorage.setItem('si-lks-lksdata', JSON.stringify(lksData));
-      localStorage.setItem('si-lks-pmdata', JSON.stringify(pmData));
-      localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
-      localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
-      localStorage.setItem('si-lks-notifications', JSON.stringify(notifications));
-      if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
-      if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
-      setStorageError(null);
-    } catch (err: any) {
-      console.error("Storage Error:", err);
-      if (err.name === 'QuotaExceededError' || err.code === 22) {
-        setStorageError("Memori Penyimpanan Penuh! Hapus beberapa dokumen PDF untuk menambah data baru.");
-      } else {
-        setStorageError("Gagal menyimpan data ke memori lokal.");
+    const timeout = setTimeout(() => {
+      try {
+        localStorage.setItem('si-lks-appname', appName);
+        localStorage.setItem('si-lks-applogo', appLogo || '');
+        localStorage.setItem('si-lks-allusers', JSON.stringify(allUsers));
+        localStorage.setItem('si-lks-lksdata', JSON.stringify(lksData));
+        localStorage.setItem('si-lks-pmdata', JSON.stringify(pmData));
+        localStorage.setItem('si-lks-lettersdata', JSON.stringify(lettersData));
+        localStorage.setItem('si-lks-islogged', isLoggedIn.toString());
+        localStorage.setItem('si-lks-notifications', JSON.stringify(notifications));
+        if (currentUser) localStorage.setItem('si-lks-currentuser', JSON.stringify(currentUser));
+        if (cloudConfig) localStorage.setItem('si-lks-cloud-config', JSON.stringify(cloudConfig));
+        setStorageError(null);
+      } catch (err: any) {
+        console.error("Storage Error:", err);
+        if (err.name === 'QuotaExceededError' || err.code === 22) {
+          setStorageError("Memori Penyimpanan Penuh! Hapus beberapa dokumen PDF untuk menambah data baru.");
+        }
       }
-    }
-  }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, currentUser, cloudConfig, notifications]);
-
+    }, 1000); // Debounce local storage saves
+    return () => clearTimeout(timeout);
+  }, [appName, appLogo, allUsers, lksData, pmData, lettersData, isLoggedIn, notifications, currentUser, cloudConfig]);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
 
   useEffect(() => {
@@ -183,101 +184,150 @@ const App: React.FC = () => {
     }
   }, [cloudConfig]);
 
-  // Optimized Partial Sync Logic
+  // 1. Sync Config & Small Data
   useEffect(() => {
     if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
 
-    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    syncTimeoutRef.current = setTimeout(async () => {
-      setSyncStatus('syncing');
+    const configToSync = {
+      appName, appLogo, allUsers, lettersData,
+      notifications: notifications.map(n => ({...n, time: n.time.toISOString()}))
+    };
+    const configStr = JSON.stringify(configToSync);
+    
+    if (configStr === lastSyncedConfig.current) return;
+
+    const timeout = setTimeout(async () => {
       try {
         const db = getFirestore();
         const projectRef = doc(db, 'projects', cloudConfig.projectId);
-        
-        // 1. Sync Config & Small Data (Always merge)
         await setDoc(projectRef, {
-          appName, appLogo, allUsers, lettersData,
-          notifications: notifications.map(n => ({...n, time: n.time.toISOString()})),
+          ...configToSync,
           lastSync: new Date().toISOString()
         }, { merge: true });
-
-        // 2. Partial Sync LKS
-        const currentLksStr = JSON.stringify(lksData);
-        if (currentLksStr !== lastSyncedLks.current) {
-          const prevLks = lastSyncedLks.current ? JSON.parse(lastSyncedLks.current) as LKS[] : [];
-          
-          // Find changed or new
-          const changedLks = lksData.filter(curr => {
-            const prev = prevLks.find(p => p.id === curr.id);
-            return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
-          });
-
-          for (const lks of changedLks) {
-            const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
-            await setDoc(lksDoc, lks, { merge: true });
-          }
-          
-          lastSyncedLks.current = currentLksStr;
-        }
-
-        // 3. Partial Sync PM
-        const currentPmStr = JSON.stringify(pmData);
-        if (currentPmStr !== lastSyncedPm.current) {
-          const prevPm = lastSyncedPm.current ? JSON.parse(lastSyncedPm.current) as PMType[] : [];
-          
-          // A. Find changed or new (Upsert)
-          const changedPm = pmData.filter(curr => {
-            const prev = prevPm.find(p => p.id === curr.id);
-            return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
-          });
-
-          // B. Find deleted items
-          const deletedPmIds = prevPm
-            .filter(prev => !pmData.some(curr => curr.id === prev.id))
-            .map(p => p.id);
-
-          // Execute Batch Operations
-          if (changedPm.length > 0 || deletedPmIds.length > 0) {
-            const pmBatchSize = 100; // Increased batch size
-            
-            // Handle Upserts
-            for (let i = 0; i < changedPm.length; i += pmBatchSize) {
-              const batch = writeBatch(db);
-              const chunk = changedPm.slice(i, i + pmBatchSize);
-              chunk.forEach(pm => {
-                const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
-                batch.set(pmDoc, pm, { merge: true });
-              });
-              await batch.commit();
-            }
-
-            // Handle Deletions
-            for (let i = 0; i < deletedPmIds.length; i += pmBatchSize) {
-              const batch = writeBatch(db);
-              const chunk = deletedPmIds.slice(i, i + pmBatchSize);
-              chunk.forEach(id => {
-                const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', id);
-                batch.delete(pmDoc);
-              });
-              await batch.commit();
-            }
-          }
-          
-          lastSyncedPm.current = currentPmStr;
-        }
-
-        setSyncStatus('connected');
-      } catch (err: any) {
-        console.error("Cloud Sync Error:", err);
-        setSyncStatus('error');
-        if (err.message && err.message.includes('too large')) {
-          setStorageError("Gagal Sinkronisasi: Data terlalu besar. Hubungi pengembang.");
-        }
+        lastSyncedConfig.current = configStr;
+      } catch (err) {
+        console.error("Config Sync Error:", err);
       }
-    }, 2000); // Reduced to 2 seconds for snappier feel
+    }, 3000);
 
-    return () => clearTimeout(syncTimeoutRef.current);
-  }, [lksData, pmData, lettersData, allUsers, appName, appLogo, notifications, syncStatus, cloudConfig]);
+    return () => clearTimeout(timeout);
+  }, [appName, appLogo, allUsers, lettersData, notifications, cloudConfig, syncStatus]);
+
+  // 2. Optimized Partial Sync LKS
+  useEffect(() => {
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+
+    const currentLksStr = JSON.stringify(lksData);
+    if (currentLksStr === lastSyncedLks.current) return;
+
+    const timeout = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        const db = getFirestore();
+        const prevLks = lastSyncedLks.current ? JSON.parse(lastSyncedLks.current) as LKS[] : [];
+        
+        // Find changed or new
+        const changedLks = lksData.filter(curr => {
+          const prev = prevLks.find(p => p.id === curr.id);
+          return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
+        });
+
+        // Find deleted
+        const currentIds = new Set(lksData.map(l => l.id));
+        const deletedLksIds = prevLks.filter(p => !currentIds.has(p.id)).map(p => p.id);
+
+        if (changedLks.length > 0 || deletedLksIds.length > 0) {
+          const batchSize = 100;
+          
+          // Upserts
+          for (let i = 0; i < changedLks.length; i += batchSize) {
+            const batch = writeBatch(db);
+            changedLks.slice(i, i + batchSize).forEach(lks => {
+              const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
+              batch.set(lksDoc, lks, { merge: true });
+            });
+            await batch.commit();
+          }
+
+          // Deletions
+          for (let i = 0; i < deletedLksIds.length; i += batchSize) {
+            const batch = writeBatch(db);
+            deletedLksIds.slice(i, i + batchSize).forEach(id => {
+              const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', id);
+              batch.delete(lksDoc);
+            });
+            await batch.commit();
+          }
+        }
+        
+        lastSyncedLks.current = currentLksStr;
+        setSyncStatus('connected');
+      } catch (err) {
+        console.error("LKS Sync Error:", err);
+        setSyncStatus('error');
+      }
+    }, 2000);
+
+    return () => clearTimeout(timeout);
+  }, [lksData, cloudConfig, syncStatus]);
+
+  // 3. Optimized Partial Sync PM
+  useEffect(() => {
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+
+    const currentPmStr = JSON.stringify(pmData);
+    if (currentPmStr === lastSyncedPm.current) return;
+
+    const timeout = setTimeout(async () => {
+      setSyncStatus('syncing');
+      try {
+        const db = getFirestore();
+        const prevPm = lastSyncedPm.current ? JSON.parse(lastSyncedPm.current) as PMType[] : [];
+        
+        // Find changed or new
+        const changedPm = pmData.filter(curr => {
+          const prev = prevPm.find(p => p.id === curr.id);
+          return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
+        });
+
+        // Find deleted
+        const currentIds = new Set(pmData.map(p => p.id));
+        const deletedPmIds = prevPm.filter(p => !currentIds.has(p.id)).map(p => p.id);
+
+        if (changedPm.length > 0 || deletedPmIds.length > 0) {
+          const batchSize = 100;
+          
+          // Upserts
+          for (let i = 0; i < changedPm.length; i += batchSize) {
+            const batch = writeBatch(db);
+            changedPm.slice(i, i + batchSize).forEach(pm => {
+              const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
+              batch.set(pmDoc, pm, { merge: true });
+            });
+            await batch.commit();
+          }
+
+          // Deletions
+          for (let i = 0; i < deletedPmIds.length; i += batchSize) {
+            const batch = writeBatch(db);
+            deletedPmIds.slice(i, i + batchSize).forEach(id => {
+              const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', id);
+              batch.delete(pmDoc);
+            });
+            await batch.commit();
+          }
+        }
+        
+        lastSyncedPm.current = currentPmStr;
+        setSyncStatus('connected');
+      } catch (err) {
+        console.error("PM Sync Error:", err);
+        setSyncStatus('error');
+      }
+    }, 2000);
+
+    return () => clearTimeout(timeout);
+  }, [pmData, cloudConfig, syncStatus]);
 
   const addNotification = (action: string, target: string) => {
     if (!currentUser) return;
