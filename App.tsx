@@ -225,20 +225,39 @@ const App: React.FC = () => {
         if (currentPmStr !== lastSyncedPm.current) {
           const prevPm = lastSyncedPm.current ? JSON.parse(lastSyncedPm.current) as PMType[] : [];
           
-          // Find changed or new
+          // A. Find changed or new (Upsert)
           const changedPm = pmData.filter(curr => {
             const prev = prevPm.find(p => p.id === curr.id);
             return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
           });
 
-          if (changedPm.length > 0) {
-            const pmBatchSize = 50;
+          // B. Find deleted items
+          const deletedPmIds = prevPm
+            .filter(prev => !pmData.some(curr => curr.id === prev.id))
+            .map(p => p.id);
+
+          // Execute Batch Operations
+          if (changedPm.length > 0 || deletedPmIds.length > 0) {
+            const pmBatchSize = 100; // Increased batch size
+            
+            // Handle Upserts
             for (let i = 0; i < changedPm.length; i += pmBatchSize) {
               const batch = writeBatch(db);
               const chunk = changedPm.slice(i, i + pmBatchSize);
               chunk.forEach(pm => {
                 const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
                 batch.set(pmDoc, pm, { merge: true });
+              });
+              await batch.commit();
+            }
+
+            // Handle Deletions
+            for (let i = 0; i < deletedPmIds.length; i += pmBatchSize) {
+              const batch = writeBatch(db);
+              const chunk = deletedPmIds.slice(i, i + pmBatchSize);
+              chunk.forEach(id => {
+                const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', id);
+                batch.delete(pmDoc);
               });
               await batch.commit();
             }
