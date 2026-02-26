@@ -109,34 +109,40 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
         body: formData
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 401) {
-          alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
-        } else {
-          throw new Error(errorData.error || "Gagal upload ke Google Drive");
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const uploadData = await response.json();
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
+          } else {
+            throw new Error(uploadData.error || "Gagal upload ke Google Drive");
+          }
+          return;
         }
-        return;
+
+        // Update local state
+        setData(prev => prev.map(item => {
+          if (item.id === lks.id) {
+            return {
+              ...item,
+              dokumen: {
+                ...item.dokumen,
+                [field]: uploadData.viewLink
+              }
+            };
+          }
+          return item;
+        }));
+
+        if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} Berhasil`);
+        alert("Berkas berhasil diunggah ke Google Drive.");
+      } else {
+        const text = await response.text();
+        console.error("Server returned non-JSON response:", text);
+        throw new Error("Server mengembalikan respon yang tidak valid (Bukan JSON).");
       }
-
-      const uploadData = await response.json();
-      
-      // Update local state
-      setData(prev => prev.map(item => {
-        if (item.id === lks.id) {
-          return {
-            ...item,
-            dokumen: {
-              ...item.dokumen,
-              [field]: uploadData.viewLink
-            }
-          };
-        }
-        return item;
-      }));
-
-      if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} Berhasil`);
-      alert("Berkas berhasil diunggah ke Google Drive.");
     } catch (error: any) {
       console.error("Upload Error:", error);
       alert(error.message || "Gagal mengunggah berkas ke Google Drive.");

@@ -110,13 +110,19 @@ const Profile: React.FC<ProfileProps> = ({
   const handleConnectGoogle = async () => {
     try {
       const response = await fetch('/api/auth/google/url');
-      const data = await response.json();
+      const contentType = response.headers.get("content-type");
       
-      if (!response.ok) {
-        throw new Error(data.error || "Gagal mengambil URL autentikasi Google.");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Gagal mengambil URL autentikasi Google.");
+        }
+        window.open(data.url, 'google_auth', 'width=600,height=700');
+      } else {
+        const text = await response.text();
+        console.error("Server returned non-JSON response:", text);
+        throw new Error("Server mengembalikan respon yang tidak valid (Bukan JSON). Pastikan server berjalan dengan benar.");
       }
-      
-      window.open(data.url, 'google_auth', 'width=600,height=700');
     } catch (error: any) {
       alert(error.message || "Gagal mengambil URL autentikasi Google.");
     }
