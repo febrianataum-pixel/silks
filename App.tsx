@@ -75,6 +75,8 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error' | 'connected'>('idle');
   const isRemoteUpdate = useRef<boolean>(false);
   const syncTimeoutRef = useRef<any>(null);
+  const lastSyncedLks = useRef<string>('');
+  const lastSyncedPm = useRef<string>('');
 
   const [storageError, setStorageError] = useState<string | null>(null);
 
@@ -181,7 +183,7 @@ const App: React.FC = () => {
     }
   }, [cloudConfig]);
 
-  // Optimized Sync Logic
+  // Optimized Partial Sync Logic
   useEffect(() => {
     if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
 
@@ -192,30 +194,57 @@ const App: React.FC = () => {
         const db = getFirestore();
         const projectRef = doc(db, 'projects', cloudConfig.projectId);
         
-        // Sync Config & Small Data
+        // 1. Sync Config & Small Data (Always merge)
         await setDoc(projectRef, {
           appName, appLogo, allUsers, lettersData,
           notifications: notifications.map(n => ({...n, time: n.time.toISOString()})),
           lastSync: new Date().toISOString()
         }, { merge: true });
 
-        // Sync LKS (Individual Docs)
-        for (const lks of lksData) {
-          const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
-          await setDoc(lksDoc, lks, { merge: true });
+        // 2. Partial Sync LKS
+        const currentLksStr = JSON.stringify(lksData);
+        if (currentLksStr !== lastSyncedLks.current) {
+          const prevLks = lastSyncedLks.current ? JSON.parse(lastSyncedLks.current) as LKS[] : [];
+          
+          // Find changed or new
+          const changedLks = lksData.filter(curr => {
+            const prev = prevLks.find(p => p.id === curr.id);
+            return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
+          });
+
+          for (const lks of changedLks) {
+            const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
+            await setDoc(lksDoc, lks, { merge: true });
+          }
+          
+          lastSyncedLks.current = currentLksStr;
         }
 
-        // Sync PM (Individual Docs) - In a real app, we'd only sync changed ones
-        // For now, we'll do them in batches if there are many
-        const pmBatchSize = 100;
-        for (let i = 0; i < pmData.length; i += pmBatchSize) {
-          const batch = writeBatch(db);
-          const chunk = pmData.slice(i, i + pmBatchSize);
-          chunk.forEach(pm => {
-            const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
-            batch.set(pmDoc, pm, { merge: true });
+        // 3. Partial Sync PM
+        const currentPmStr = JSON.stringify(pmData);
+        if (currentPmStr !== lastSyncedPm.current) {
+          const prevPm = lastSyncedPm.current ? JSON.parse(lastSyncedPm.current) as PMType[] : [];
+          
+          // Find changed or new
+          const changedPm = pmData.filter(curr => {
+            const prev = prevPm.find(p => p.id === curr.id);
+            return !prev || JSON.stringify(prev) !== JSON.stringify(curr);
           });
-          await batch.commit();
+
+          if (changedPm.length > 0) {
+            const pmBatchSize = 50;
+            for (let i = 0; i < changedPm.length; i += pmBatchSize) {
+              const batch = writeBatch(db);
+              const chunk = changedPm.slice(i, i + pmBatchSize);
+              chunk.forEach(pm => {
+                const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
+                batch.set(pmDoc, pm, { merge: true });
+              });
+              await batch.commit();
+            }
+          }
+          
+          lastSyncedPm.current = currentPmStr;
         }
 
         setSyncStatus('connected');
@@ -226,7 +255,7 @@ const App: React.FC = () => {
           setStorageError("Gagal Sinkronisasi: Data terlalu besar. Hubungi pengembang.");
         }
       }
-    }, 5000); // Longer debounce for collection sync
+    }, 2000); // Reduced to 2 seconds for snappier feel
 
     return () => clearTimeout(syncTimeoutRef.current);
   }, [lksData, pmData, lettersData, allUsers, appName, appLogo, notifications, syncStatus, cloudConfig]);
