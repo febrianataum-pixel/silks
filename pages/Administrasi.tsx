@@ -5,9 +5,9 @@ import {
   ShieldCheck, UserCheck, FileText, Award, AlertCircle, 
   ExternalLink, Eye, Info, X, FileSearch, MapPin, Download,
   Fingerprint, Calendar, CheckCircle2, Maximize2, Loader2,
-  ExternalLink as OpenIcon, Trash2, FileType
+  ExternalLink as OpenIcon, Trash2, FileType, UploadCloud, Upload
 } from 'lucide-react';
-import { LKS } from '../types';
+import { LKS, LKSDocuments } from '../types';
 
 interface AdministrasiPageProps {
   data: LKS[];
@@ -28,6 +28,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
+  const [isUploading, setIsUploading] = useState<{lksId: string, docKey: string} | null>(null);
 
   useEffect(() => {
     if (previewDoc?.fileData?.startsWith('http')) {
@@ -97,6 +98,53 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
     alert('Dokumen berhasil dihapus.');
   };
 
+  const handleFileUpload = async (lks: LKS, field: keyof LKSDocuments, file: File) => {
+    setIsUploading({ lksId: lks.id, docKey: field });
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/upload/google-drive', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 401) {
+          alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
+        } else {
+          throw new Error(errorData.error || "Gagal upload ke Google Drive");
+        }
+        return;
+      }
+
+      const uploadData = await response.json();
+      
+      // Update local state
+      setData(prev => prev.map(item => {
+        if (item.id === lks.id) {
+          return {
+            ...item,
+            dokumen: {
+              ...item.dokumen,
+              [field]: uploadData.viewLink
+            }
+          };
+        }
+        return item;
+      }));
+
+      if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} Berhasil`);
+      alert("Berkas berhasil diunggah ke Google Drive.");
+    } catch (error: any) {
+      console.error("Upload Error:", error);
+      alert(error.message || "Gagal mengunggah berkas ke Google Drive.");
+    } finally {
+      setIsUploading(null);
+    }
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 lg:space-y-6">
       {/* Stats - Grid optimized for mobile */}
@@ -159,10 +207,10 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
                     </div>
                  </div>
                  <div className="grid grid-cols-4 gap-2">
-                    <MiniDoc label="KTP" status={getDocStatus(lks, 'ktpKetua')} onOpen={() => handleOpenDoc(lks, "KTP", getFileData(lks, 'ktpKetua'), 'ktpKetua')} />
-                    <MiniDoc label="SK" status={getDocStatus(lks, 'skKemenkumham')} onOpen={() => handleOpenDoc(lks, "SK", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} />
-                    <MiniDoc label="Izin" status={getDocStatus(lks, 'tandaDaftar')} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} />
-                    <MiniDoc label="Akred" status={getDocStatus(lks, 'sertifikatAkreditasi')} onOpen={() => handleOpenDoc(lks, "Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} />
+                    <MiniDoc label="KTP" status={getDocStatus(lks, 'ktpKetua')} onOpen={() => handleOpenDoc(lks, "KTP", getFileData(lks, 'ktpKetua'), 'ktpKetua')} onUpload={(file) => handleFileUpload(lks, 'ktpKetua', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'ktpKetua'} />
+                    <MiniDoc label="SK" status={getDocStatus(lks, 'skKemenkumham')} onOpen={() => handleOpenDoc(lks, "SK", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} onUpload={(file) => handleFileUpload(lks, 'skKemenkumham', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'skKemenkumham'} />
+                    <MiniDoc label="Izin" status={getDocStatus(lks, 'tandaDaftar')} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} onUpload={(file) => handleFileUpload(lks, 'tandaDaftar', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'tandaDaftar'} />
+                    <MiniDoc label="Akred" status={getDocStatus(lks, 'sertifikatAkreditasi')} onOpen={() => handleOpenDoc(lks, "Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} onUpload={(file) => handleFileUpload(lks, 'sertifikatAkreditasi', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'sertifikatAkreditasi'} />
                  </div>
               </div>
 
@@ -179,10 +227,10 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
                   </div>
                 </div>
                 <div className="flex-1 p-8 grid grid-cols-4 gap-6">
-                  <DocItem label="KTP Ketua" status={getDocStatus(lks, 'ktpKetua')} icon={UserCheck} onOpen={() => handleOpenDoc(lks, "KTP Ketua", getFileData(lks, 'ktpKetua'), 'ktpKetua')} onDelete={() => setDeleteConfirm({ lks, docKey: 'ktpKetua', docLabel: 'KTP Ketua' })} />
-                  <DocItem label="SK Kemenkumham" status={getDocStatus(lks, 'skKemenkumham')} icon={ShieldCheck} onOpen={() => handleOpenDoc(lks, "SK Kemenkumham", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} onDelete={() => setDeleteConfirm({ lks, docKey: 'skKemenkumham', docLabel: 'SK Kemenkumham' })} />
-                  <DocItem label="Tanda Daftar" status={getDocStatus(lks, 'tandaDaftar')} icon={FileText} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} onDelete={() => setDeleteConfirm({ lks, docKey: 'tandaDaftar', docLabel: 'Surat Tanda Daftar' })} />
-                  <DocItem label="Akreditasi" status={getDocStatus(lks, 'sertifikatAkreditasi')} icon={Award} onOpen={() => handleOpenDoc(lks, "Sertifikat Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} onDelete={() => setDeleteConfirm({ lks, docKey: 'sertifikatAkreditasi', docLabel: 'Sertifikat Akreditasi' })} />
+                  <DocItem label="KTP Ketua" status={getDocStatus(lks, 'ktpKetua')} icon={UserCheck} onOpen={() => handleOpenDoc(lks, "KTP Ketua", getFileData(lks, 'ktpKetua'), 'ktpKetua')} onDelete={() => setDeleteConfirm({ lks, docKey: 'ktpKetua', docLabel: 'KTP Ketua' })} onUpload={(file) => handleFileUpload(lks, 'ktpKetua', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'ktpKetua'} />
+                  <DocItem label="SK Kemenkumham" status={getDocStatus(lks, 'skKemenkumham')} icon={ShieldCheck} onOpen={() => handleOpenDoc(lks, "SK Kemenkumham", getFileData(lks, 'skKemenkumham'), 'skKemenkumham')} onDelete={() => setDeleteConfirm({ lks, docKey: 'skKemenkumham', docLabel: 'SK Kemenkumham' })} onUpload={(file) => handleFileUpload(lks, 'skKemenkumham', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'skKemenkumham'} />
+                  <DocItem label="Tanda Daftar" status={getDocStatus(lks, 'tandaDaftar')} icon={FileText} onOpen={() => handleOpenDoc(lks, "Tanda Daftar", getFileData(lks, 'tandaDaftar'), 'tandaDaftar')} onDelete={() => setDeleteConfirm({ lks, docKey: 'tandaDaftar', docLabel: 'Surat Tanda Daftar' })} onUpload={(file) => handleFileUpload(lks, 'tandaDaftar', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'tandaDaftar'} />
+                  <DocItem label="Akreditasi" status={getDocStatus(lks, 'sertifikatAkreditasi')} icon={Award} onOpen={() => handleOpenDoc(lks, "Sertifikat Akreditasi", getFileData(lks, 'sertifikatAkreditasi'), 'sertifikatAkreditasi')} onDelete={() => setDeleteConfirm({ lks, docKey: 'sertifikatAkreditasi', docLabel: 'Sertifikat Akreditasi' })} onUpload={(file) => handleFileUpload(lks, 'sertifikatAkreditasi', file)} isUploading={isUploading?.lksId === lks.id && isUploading?.docKey === 'sertifikatAkreditasi'} />
                 </div>
               </div>
             </div>
@@ -249,17 +297,29 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   );
 };
 
-const MiniDoc = ({ label, status, onOpen }: { label: string, status: boolean, onOpen: () => void }) => (
-  <button 
-    onClick={status ? onOpen : undefined}
-    className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${status ? 'bg-emerald-50 border-emerald-100 text-emerald-600 active:scale-95' : 'bg-slate-50 border-slate-100 text-slate-300'}`}
-  >
-     {status ? <FileCheck size={14} /> : <FileX size={14} />}
-     <span className="text-[7px] font-black uppercase tracking-widest">{label}</span>
-  </button>
+const MiniDoc = ({ label, status, onOpen, onUpload, isUploading }: { label: string, status: boolean, onOpen: () => void, onUpload: (file: File) => void, isUploading: boolean }) => (
+  <div className="relative">
+    <button 
+      onClick={status ? onOpen : undefined}
+      className={`w-full p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${status ? 'bg-emerald-50 border-emerald-100 text-emerald-600 active:scale-95' : 'bg-slate-50 border-slate-100 text-slate-300'}`}
+    >
+       {status ? <FileCheck size={14} /> : <FileX size={14} />}
+       <span className="text-[7px] font-black uppercase tracking-widest">{label}</span>
+    </button>
+    {!status && (
+      <label className="absolute inset-0 cursor-pointer opacity-0">
+        <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+      </label>
+    )}
+    {isUploading && (
+      <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-xl">
+        <Loader2 size={12} className="animate-spin text-blue-600" />
+      </div>
+    )}
+  </div>
 );
 
-const DocItem = ({ label, status, icon: Icon, onOpen, onDelete }: { label: string, status: boolean, icon: any, onOpen: () => void, onDelete: () => void }) => (
+const DocItem = ({ label, status, icon: Icon, onOpen, onDelete, onUpload, isUploading }: { label: string, status: boolean, icon: any, onOpen: () => void, onDelete: () => void, onUpload: (file: File) => void, isUploading: boolean }) => (
   <div className={`p-6 rounded-[2rem] border-2 transition-all group/item hover:border-blue-200 hover:bg-white ${status ? 'border-emerald-50 bg-emerald-50/20' : 'border-slate-50 bg-slate-50/30'}`}>
     <div className="flex items-center justify-between mb-4">
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${status ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-200 text-slate-400'}`}><Icon size={24} /></div>
@@ -268,12 +328,24 @@ const DocItem = ({ label, status, icon: Icon, onOpen, onDelete }: { label: strin
           <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-lg transition-all"><Trash2 size={16} /></button>
           <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg"><FileCheck size={16} /></div>
         </div>
-      ) : <div className="p-1.5 bg-slate-100 text-slate-300 rounded-lg"><FileX size={16} /></div>}
+      ) : (
+        <div className="p-1.5 bg-slate-100 text-slate-300 rounded-lg"><FileX size={16} /></div>
+      )}
     </div>
     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
     <div className="flex items-center justify-between mt-2">
        <p className={`text-xs font-black ${status ? 'text-emerald-700' : 'text-slate-400'}`}>{status ? 'OK' : '-'}</p>
-       {status && <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-slate-900 transition-all flex items-center gap-1.5 active:scale-90"><Maximize2 size={12} /><span className="text-[9px] font-black uppercase">Buka</span></button>}
+       {status ? (
+         <button onClick={(e) => { e.stopPropagation(); onOpen(); }} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-slate-900 transition-all flex items-center gap-1.5 active:scale-90">
+           <Maximize2 size={12} /><span className="text-[9px] font-black uppercase">Buka</span>
+         </button>
+       ) : (
+         <label className="cursor-pointer p-2 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all flex items-center gap-1.5 active:scale-90">
+            {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+            <span className="text-[9px] font-black uppercase">{isUploading ? 'Proses' : 'Upload'}</span>
+            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+         </label>
+       )}
     </div>
   </div>
 );
