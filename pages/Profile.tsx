@@ -110,10 +110,15 @@ const Profile: React.FC<ProfileProps> = ({
   const handleConnectGoogle = async () => {
     try {
       const response = await fetch('/api/auth/google/url');
-      const { url } = await response.json();
-      window.open(url, 'google_auth', 'width=600,height=700');
-    } catch (error) {
-      alert("Gagal mengambil URL autentikasi Google.");
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Gagal mengambil URL autentikasi Google.");
+      }
+      
+      window.open(data.url, 'google_auth', 'width=600,height=700');
+    } catch (error: any) {
+      alert(error.message || "Gagal mengambil URL autentikasi Google.");
     }
   };
 

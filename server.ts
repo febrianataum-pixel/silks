@@ -28,12 +28,22 @@ app.get("/api/health", (req, res) => {
 
 // Google Auth URL
 app.get("/api/auth/google/url", (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/drive.file'],
-    prompt: 'consent'
-  });
-  res.json({ url });
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(400).json({ 
+      error: "Konfigurasi Google OAuth belum lengkap. Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah diatur di Environment Variables." 
+    });
+  }
+
+  try {
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/drive.file'],
+      prompt: 'consent'
+    });
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal membuat URL autentikasi Google." });
+  }
 });
 
 // Google Auth Callback
