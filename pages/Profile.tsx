@@ -114,6 +114,23 @@ const Profile: React.FC<ProfileProps> = ({
     alert('Sinkronisasi Cloud Aktif! Silakan muat ulang halaman jika diperlukan.');
   };
 
+  const [googleDebug, setGoogleDebug] = useState<any>(null);
+  
+  useEffect(() => {
+    const fetchGoogleDebug = async () => {
+      try {
+        const response = await fetch('/api/auth/google/config-debug');
+        if (response.ok) {
+          const data = await response.json();
+          setGoogleDebug(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Google debug info:", err);
+      }
+    };
+    fetchGoogleDebug();
+  }, [isGoogleConnected]);
+
   const handleConnectGoogle = async () => {
     try {
       const response = await fetch('/api/auth/google/url');
@@ -275,6 +292,24 @@ const Profile: React.FC<ProfileProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
+                  <span>Google Client ID:</span>
+                  <span className={googleDebug?.hasClientId ? 'text-emerald-600' : 'text-rose-600'}>
+                    {googleDebug?.hasClientId ? 'TERSEDIA' : 'KOSONG'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span>Google Client Secret:</span>
+                  <span className={googleDebug?.hasClientSecret ? 'text-emerald-600' : 'text-rose-600'}>
+                    {googleDebug?.hasClientSecret ? 'TERSEDIA' : 'KOSONG'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2 col-span-1 md:col-span-2">
+                  <span>Redirect URI (Google Console):</span>
+                  <span className="text-blue-600 lowercase truncate max-w-[200px] md:max-w-none" title={googleDebug?.redirectUri}>
+                    {googleDebug?.redirectUri || 'Loading...'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
                   <span>Penyimpanan Aktif:</span>
                   <span className="text-blue-600">
                     {cloudConfig?.apiKey ? 'FIREBASE' : isGoogleConnected ? 'GOOGLE DRIVE' : 'LOCAL STORAGE'}
@@ -287,7 +322,7 @@ const Profile: React.FC<ProfileProps> = ({
               </div>
               <p className="mt-4 text-[8px] text-slate-400 font-medium italic">
                 * Jika unggah PDF gagal tanpa pesan error, pastikan file tidak rusak dan ukuran di bawah 2MB.
-                Untuk Firebase, pastikan CORS sudah diatur di Google Cloud Console.
+                Untuk Google Drive, pastikan Redirect URI di atas sudah didaftarkan di Google Cloud Console.
               </p>
             </div>
           </div>

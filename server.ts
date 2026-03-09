@@ -55,25 +55,58 @@ const checkGoogleConfig = () => {
 // Google Auth Status
 app.get("/api/auth/google/status", (req, res) => {
   const tokensStr = req.cookies.google_tokens;
+  console.log("Checking Google Auth Status. Cookie present:", !!tokensStr);
   res.json({ connected: !!tokensStr });
+});
+
+// Google Auth Config Debug
+app.get("/api/auth/google/config-debug", (req, res) => {
+  const redirectUri = process.env.APP_URL 
+    ? `${process.env.APP_URL.replace(/\/$/, '')}/auth/google/callback` 
+    : 'http://localhost:3000/auth/google/callback';
+    
+  res.json({
+    hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    appUrl: process.env.APP_URL || 'Not Set',
+    redirectUri: redirectUri,
+    envKeys: Object.keys(process.env).filter(k => k.includes('GOOGLE') || k === 'APP_URL')
+  });
 });
 
 // Google Auth URL
 app.get("/api/auth/google/url", (req, res) => {
   if (!checkGoogleConfig()) {
+    console.error("Google Config Missing:", { 
+      clientId: !!process.env.GOOGLE_CLIENT_ID, 
+      clientSecret: !!process.env.GOOGLE_CLIENT_SECRET 
+    });
     return res.status(400).json({ 
       error: "Konfigurasi Google OAuth belum lengkap. Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah diatur di file .env." 
     });
   }
 
   try {
-    const url = oauth2Client.generateAuthUrl({
+    // Re-initialize client to ensure latest redirect URI from APP_URL
+    const currentRedirectUri = process.env.APP_URL 
+      ? `${process.env.APP_URL.replace(/\/$/, '')}/auth/google/callback` 
+      : 'http://localhost:3000/auth/google/callback';
+      
+    const client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      currentRedirectUri
+    );
+
+    const url = client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/drive.file'],
       prompt: 'consent'
     });
+    console.log("Generated Auth URL with Redirect URI:", currentRedirectUri);
     res.json({ url });
   } catch (err) {
+    console.error("Error generating Auth URL:", err);
     res.status(500).json({ error: "Gagal membuat URL autentikasi Google." });
   }
 });
@@ -81,8 +114,21 @@ app.get("/api/auth/google/url", (req, res) => {
 // Google Auth Callback
 app.get("/auth/google/callback", async (req, res) => {
   const { code } = req.query;
+  console.log("Received Google Auth Callback with code:", !!code);
+  
   try {
-    const { tokens } = await oauth2Client.getToken(code as string);
+    const currentRedirectUri = process.env.APP_URL 
+      ? `${process.env.APP_URL.replace(/\/$/, '')}/auth/google/callback` 
+      : 'http://localhost:3000/auth/google/callback';
+
+    const client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      currentRedirectUri
+    );
+
+    const { tokens } = await client.getToken(code as string);
+    console.log("Successfully obtained tokens from Google");
     // In a real app, store this in a database linked to the user
     // For this demo, we'll use a cookie (SameSite=None for iframe)
     res.cookie('google_tokens', JSON.stringify(tokens), {
@@ -157,7 +203,8 @@ app.post("/api/upload/google-drive", (req, res) => {
     const tokensStr = req.cookies.google_tokens;
     if (!tokensStr) {
       if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(401).json({ error: "Not authenticated with Google" });
+      console.warn("Upload attempt failed: No google_tokens cookie found");
+      return res.status(401).json({ error: "Not authenticated with Google. Please connect your Google account in Profile settings." });
     }
 
     if (!req.file) {
@@ -166,8 +213,19 @@ app.post("/api/upload/google-drive", (req, res) => {
 
     try {
       const tokens = JSON.parse(tokensStr);
-      oauth2Client.setCredentials(tokens);
-      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+      
+      const currentRedirectUri = process.env.APP_URL 
+        ? `${process.env.APP_URL.replace(/\/$/, '')}/auth/google/callback` 
+        : 'http://localhost:3000/auth/google/callback';
+
+      const client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        currentRedirectUri
+      );
+      
+      client.setCredentials(tokens);
+      const drive = google.drive({ version: 'v3', auth: client });
 
       const fileMetadata = {
         name: req.file.originalname,

@@ -110,7 +110,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkGoogleStatus = async () => {
       try {
-        const response = await fetch('/api/auth/google/status');
+        const response = await fetch('/api/auth/google/status', { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
           setIsGoogleConnected(data.connected);
