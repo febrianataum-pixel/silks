@@ -93,27 +93,35 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
   const handleFileUpload = async (field: keyof LKSDocuments, file: File) => {
     setIsUploading(field);
     
-    // Priority: 1. Firebase Storage, 2. Google Drive, 3. Local
-    if (storage && selectedLks) {
-      try {
-        const path = `dokumen/${selectedLks.id}/${field}_${Date.now()}_${file.name}`;
-        const downloadUrl = await uploadFile(file, path);
-        
-        handleChange(`dokumen.${field}`, downloadUrl);
-        if (onNotify) onNotify('Upload Berkas', `${field} (Firebase)`);
-        setIsUploading(null);
-        return;
-      } catch (error: any) {
-        console.error("Firebase Upload Error:", error);
-      }
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
-
     try {
+      // Priority: 1. Firebase Storage, 2. Google Drive, 3. Local
+      if (storage && selectedLks) {
+        try {
+          const path = `dokumen/${selectedLks.id}/${field}_${Date.now()}_${file.name}`;
+          const downloadUrl = await uploadFile(file, path);
+          
+          handleChange(`dokumen.${field}`, downloadUrl);
+          if (onNotify) onNotify('Upload Berkas', `${field} (Firebase)`);
+          setIsUploading(null);
+          return;
+        } catch (error: any) {
+          console.error("Firebase Upload Error:", error);
+          // Only fallback if it's not a configuration error
+          if (error.message.includes("belum dikonfigurasi")) {
+            // continue to next method
+          } else {
+            // If Firebase is configured but fails, notify user
+            alert(error.message || "Gagal upload ke Firebase Storage.");
+            // continue to fallback
+          }
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
+
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
@@ -142,7 +150,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
         console.error("Server returned non-JSON response:", text);
         
         if (text.includes("Cookie check") || text.includes("Authenticate in new window")) {
-          throw new Error("Browser memblokir cookie keamanan. Silakan buka aplikasi di tab baru atau klik 'Authenticate in new window' jika muncul.");
+          throw new Error("Sesi berakhir atau cookie diblokir. Silakan buka menu Profil dan klik 'VERIFIKASI SESI' atau buka aplikasi di tab baru.");
         }
         
         const snippet = text.substring(0, 100);
@@ -150,7 +158,7 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
       }
     } catch (error: any) {
       console.error("Upload Error:", error);
-      alert(error.message || `Gagal mengunggah berkas ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
+      alert(error.message || `Gagal mengunggah berkas.`);
     } finally {
       setIsUploading(null);
     }

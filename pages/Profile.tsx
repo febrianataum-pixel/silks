@@ -41,6 +41,8 @@ const Profile: React.FC<ProfileProps> = ({
   
   const [firebaseApiKey, setFirebaseApiKey] = useState(cloudConfig?.apiKey || '');
   const [firebaseProjectId, setFirebaseProjectId] = useState(cloudConfig?.projectId || '');
+  const [firebaseStorageBucket, setFirebaseStorageBucket] = useState(cloudConfig?.storageBucket || '');
+  const [firebaseAppId, setFirebaseAppId] = useState(cloudConfig?.appId || '');
   
   const [tempAppName, setTempAppName] = useState(appName);
   const [newUser, setNewUser] = useState({ username: '', password: '', nama: '', role: 'User' as any });
@@ -102,9 +104,14 @@ const Profile: React.FC<ProfileProps> = ({
   };
 
   const handleActivateCloudSync = () => {
-    if (!firebaseApiKey || !firebaseProjectId) return alert('Lengkapi konfigurasi.');
-    setCloudConfig({ apiKey: firebaseApiKey, projectId: firebaseProjectId });
-    alert('Sinkronisasi Cloud Aktif!');
+    if (!firebaseApiKey || !firebaseProjectId) return alert('Lengkapi konfigurasi API Key dan Project ID.');
+    setCloudConfig({ 
+      apiKey: firebaseApiKey, 
+      projectId: firebaseProjectId,
+      storageBucket: firebaseStorageBucket,
+      appId: firebaseAppId
+    });
+    alert('Sinkronisasi Cloud Aktif! Silakan muat ulang halaman jika diperlukan.');
   };
 
   const handleConnectGoogle = async () => {
@@ -181,6 +188,8 @@ const Profile: React.FC<ProfileProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                 <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">FIREBASE API KEY</label><input type="password" value={firebaseApiKey} onChange={e => setFirebaseApiKey(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
                 <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">PROJECT ID</label><input type="text" value={firebaseProjectId} onChange={e => setFirebaseProjectId(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
+                <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">STORAGE BUCKET (OPSIONAL)</label><input type="text" value={firebaseStorageBucket} onChange={e => setFirebaseStorageBucket(e.target.value)} placeholder="project-id.appspot.com" className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
+                <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">APP ID (OPSIONAL)</label><input type="text" value={firebaseAppId} onChange={e => setFirebaseAppId(e.target.value)} className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-[1.8rem] outline-none font-bold text-white text-lg focus:border-blue-500/50 transition-all" /></div>
             </div>
             <div className="mt-12 flex flex-col md:flex-row justify-center md:justify-end gap-4 relative z-10">
                 <button onClick={handleActivateCloudSync} className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-5 rounded-[1.8rem] font-black text-sm uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center gap-4">
@@ -226,11 +235,24 @@ const Profile: React.FC<ProfileProps> = ({
               </button>
             </div>
             {!isGoogleConnected && (
-              <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
-                <AlertTriangle className="text-amber-600 shrink-0" size={18} />
-                <p className="text-[10px] text-amber-700 font-bold uppercase leading-relaxed">
-                  PENTING: Anda perlu mengatur GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET di pengaturan aplikasi untuk mengaktifkan fitur ini.
-                </p>
+              <div className="mt-6 p-6 bg-amber-50 border border-amber-100 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+                  <div>
+                    <p className="text-[10px] text-amber-700 font-black uppercase leading-relaxed">
+                      MASALAH KONEKSI / COOKIE?
+                    </p>
+                    <p className="text-[9px] text-amber-600 font-bold mt-1">
+                      Jika Anda melihat error "Cookie check", silakan klik tombol di samping untuk memverifikasi sesi Anda di tab baru.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="px-6 py-3 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all whitespace-nowrap"
+                >
+                  VERIFIKASI SESI (TAB BARU)
+                </button>
               </div>
             )}
           </div>

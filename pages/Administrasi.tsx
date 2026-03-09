@@ -103,38 +103,45 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   const handleFileUpload = async (lks: LKS, field: keyof LKSDocuments, file: File) => {
     setIsUploading({ lksId: lks.id, docKey: field });
     
-    // Priority: 1. Firebase Storage (if configured), 2. Google Drive, 3. Local
-    if (storage) {
-      try {
-        const path = `dokumen/${lks.id}/${field}_${Date.now()}_${file.name}`;
-        const downloadUrl = await uploadFile(file, path);
-        
-        setData(prev => prev.map(item => {
-          if (item.id === lks.id) {
-            return {
-              ...item,
-              dokumen: { ...item.dokumen, [field]: downloadUrl }
-            };
-          }
-          return item;
-        }));
-
-        if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} (Firebase)`);
-        alert("Berkas berhasil diunggah ke Firebase Storage.");
-        setIsUploading(null);
-        return;
-      } catch (error: any) {
-        console.error("Firebase Upload Error:", error);
-        // Fallback to other methods if Firebase fails
-      }
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
-
     try {
+      // Priority: 1. Firebase Storage (if configured), 2. Google Drive, 3. Local
+      if (storage) {
+        try {
+          const path = `dokumen/${lks.id}/${field}_${Date.now()}_${file.name}`;
+          const downloadUrl = await uploadFile(file, path);
+          
+          setData(prev => prev.map(item => {
+            if (item.id === lks.id) {
+              return {
+                ...item,
+                dokumen: { ...item.dokumen, [field]: downloadUrl }
+              };
+            }
+            return item;
+          }));
+
+          if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} (Firebase)`);
+          alert("Berkas berhasil diunggah ke Firebase Storage.");
+          setIsUploading(null);
+          return;
+        } catch (error: any) {
+          console.error("Firebase Upload Error:", error);
+          // Only fallback if it's not a configuration error
+          if (error.message.includes("belum dikonfigurasi")) {
+            // continue to next method
+          } else {
+            // If Firebase is configured but fails, notify user
+            alert(error.message || "Gagal upload ke Firebase Storage.");
+            // continue to fallback
+          }
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
+
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
@@ -175,7 +182,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
         console.error("Server returned non-JSON response:", text);
         
         if (text.includes("Cookie check") || text.includes("Authenticate in new window")) {
-          throw new Error("Browser memblokir cookie keamanan. Silakan buka aplikasi di tab baru atau klik 'Authenticate in new window' jika muncul.");
+          throw new Error("Sesi berakhir atau cookie diblokir. Silakan buka menu Profil dan klik 'VERIFIKASI SESI' atau buka aplikasi di tab baru.");
         }
         
         const snippet = text.substring(0, 100);
@@ -183,7 +190,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
       }
     } catch (error: any) {
       console.error("Upload Error:", error);
-      alert(error.message || `Gagal mengunggah berkas ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
+      alert(error.message || `Gagal mengunggah berkas.`);
     } finally {
       setIsUploading(null);
     }
