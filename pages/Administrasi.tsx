@@ -101,10 +101,10 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   };
 
   const handleFileUpload = async (lks: LKS, field: keyof LKSDocuments, file: File) => {
-    // Check file size (limit to 2MB as requested)
-    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    // Check file size (limit to 10MB as requested)
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
     if (file.size > MAX_SIZE) {
-      alert(`Berkas terlalu besar (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maksimal ukuran berkas adalah 2MB. Silakan kompres PDF Anda terlebih dahulu jika terlalu besar.`);
+      alert(`Berkas terlalu besar (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maksimal ukuran berkas adalah 10MB. Silakan kompres PDF Anda terlebih dahulu jika terlalu besar.`);
       return;
     }
 

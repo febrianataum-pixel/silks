@@ -317,11 +317,11 @@ const Profile: React.FC<ProfileProps> = ({
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span>Batas Ukuran File:</span>
-                  <span className="text-slate-800">2 MB</span>
+                  <span className="text-slate-800">10 MB</span>
                 </div>
               </div>
               <p className="mt-4 text-[8px] text-slate-400 font-medium italic">
-                * Jika unggah PDF gagal tanpa pesan error, pastikan file tidak rusak dan ukuran di bawah 2MB.
+                * Jika unggah PDF gagal tanpa pesan error, pastikan file tidak rusak dan ukuran di bawah 10MB.
                 Untuk Google Drive, pastikan Redirect URI di atas sudah didaftarkan di Google Cloud Console.
               </p>
             </div>

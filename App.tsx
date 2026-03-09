@@ -82,6 +82,23 @@ const App: React.FC = () => {
 
   const [storageError, setStorageError] = useState<string | null>(null);
 
+  // Refs for latest state to avoid stale closures in onSnapshot
+  const appNameRef = useRef(appName);
+  const appLogoRef = useRef(appLogo);
+  const allUsersRef = useRef(allUsers);
+  const lksDataRef = useRef(lksData);
+  const pmDataRef = useRef(pmData);
+  const lettersDataRef = useRef(lettersData);
+  const notificationsRef = useRef(notifications);
+
+  useEffect(() => { appNameRef.current = appName; }, [appName]);
+  useEffect(() => { appLogoRef.current = appLogo; }, [appLogo]);
+  useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
+  useEffect(() => { lksDataRef.current = lksData; }, [lksData]);
+  useEffect(() => { pmDataRef.current = pmData; }, [pmData]);
+  useEffect(() => { lettersDataRef.current = lettersData; }, [lettersData]);
+  useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       try {
@@ -150,33 +167,50 @@ const App: React.FC = () => {
       const unsubConfig = onSnapshot(projectRef, (snapshot) => {
         if (snapshot.exists()) {
           const cloud = snapshot.data();
-          isRemoteUpdate.current = true;
-          if (cloud.appName) setAppName(cloud.appName);
-          if (cloud.appLogo) setAppLogo(cloud.appLogo);
-          if (cloud.allUsers) setAllUsers(cloud.allUsers);
-          if (cloud.lettersData) setLettersData(cloud.lettersData);
-          if (cloud.notifications) setNotifications(cloud.notifications.map((n:any)=>({...n, time: new Date(n.time)})));
-          setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+          const configToSync = {
+            appName: appNameRef.current, 
+            appLogo: appLogoRef.current, 
+            allUsers: allUsersRef.current, 
+            lettersData: lettersDataRef.current,
+            notifications: notificationsRef.current.map(n => ({...n, time: n.time.toISOString()}))
+          };
+          
+          // Only update if cloud data is different from local
+          if (JSON.stringify(cloud) !== JSON.stringify(configToSync)) {
+            isRemoteUpdate.current = true;
+            if (cloud.appName && cloud.appName !== appNameRef.current) setAppName(cloud.appName);
+            if (cloud.appLogo && cloud.appLogo !== appLogoRef.current) setAppLogo(cloud.appLogo);
+            if (cloud.allUsers) setAllUsers(cloud.allUsers);
+            if (cloud.lettersData) setLettersData(cloud.lettersData);
+            if (cloud.notifications) setNotifications(cloud.notifications.map((n:any)=>({...n, time: new Date(n.time)})));
+            setTimeout(() => { isRemoteUpdate.current = false; }, 200);
+          }
         }
       });
 
       // Listen to LKS Collection
       const unsubLks = onSnapshot(lksCol, (snapshot) => {
         if (!snapshot.empty) {
-          isRemoteUpdate.current = true;
           const data = snapshot.docs.map(d => d.data() as LKS);
-          setLksData(data);
-          setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+          // Only update if data is different
+          if (JSON.stringify(data) !== JSON.stringify(lksDataRef.current)) {
+            isRemoteUpdate.current = true;
+            setLksData(data);
+            setTimeout(() => { isRemoteUpdate.current = false; }, 200);
+          }
         }
       });
 
       // Listen to PM Collection
       const unsubPm = onSnapshot(pmCol, (snapshot) => {
         if (!snapshot.empty) {
-          isRemoteUpdate.current = true;
           const data = snapshot.docs.map(d => d.data() as PMType);
-          setPmData(data);
-          setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+          // Only update if data is different
+          if (JSON.stringify(data) !== JSON.stringify(pmDataRef.current)) {
+            isRemoteUpdate.current = true;
+            setPmData(data);
+            setTimeout(() => { isRemoteUpdate.current = false; }, 200);
+          }
         }
       });
 
