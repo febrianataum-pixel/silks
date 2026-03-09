@@ -21,12 +21,15 @@ if (!fs.existsSync(uploadDir)) {
 
 const upload = multer({ 
   storage: multer.diskStorage({
-    destination: uploadDir,
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
       cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
-  })
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB limit
 });
 
 // Serve uploads directory
@@ -111,83 +114,100 @@ app.get("/auth/google/callback", async (req, res) => {
 });
 
 // Upload to Local Storage
-app.post("/api/upload/local", upload.single('file'), (req, res) => {
+app.post("/api/upload/local", (req, res, next) => {
   console.log("Local upload request received");
-  if (!req.file) {
-    console.error("No file in request");
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error("Multer Error:", err);
+      return res.status(400).json({ error: `Multer Error: ${err.message}` });
+    } else if (err) {
+      console.error("Unknown Upload Error:", err);
+      return res.status(500).json({ error: `Upload Error: ${err.message}` });
+    }
 
-  console.log("File uploaded successfully:", req.file.filename);
-  const fileUrl = `/uploads/${req.file.filename}`;
-  res.json({
-    id: req.file.filename,
-    viewLink: fileUrl,
-    downloadLink: fileUrl
+    if (!req.file) {
+      console.error("No file in request");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    console.log("File uploaded successfully:", req.file.filename);
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      id: req.file.filename,
+      viewLink: fileUrl,
+      downloadLink: fileUrl
+    });
   });
 });
 
 // Upload to Google Drive
-app.post("/api/upload/google-drive", upload.single('file'), async (req, res) => {
-  if (!checkGoogleConfig()) {
-    if (req.file) fs.unlinkSync(req.file.path);
-    return res.status(500).json({ 
-      error: "Konfigurasi Google Drive di server belum lengkap (GOOGLE_CLIENT_ID/SECRET kosong)." 
-    });
-  }
+app.post("/api/upload/google-drive", (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(500).json({ error: `Upload Error: ${err.message}` });
+    }
 
-  const tokensStr = req.cookies.google_tokens;
-  if (!tokensStr) {
-    return res.status(401).json({ error: "Not authenticated with Google" });
-  }
+    if (!checkGoogleConfig()) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(500).json({ 
+        error: "Konfigurasi Google Drive di server belum lengkap (GOOGLE_CLIENT_ID/SECRET kosong)." 
+      });
+    }
 
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+    const tokensStr = req.cookies.google_tokens;
+    if (!tokensStr) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(401).json({ error: "Not authenticated with Google" });
+    }
 
-  try {
-    const tokens = JSON.parse(tokensStr);
-    oauth2Client.setCredentials(tokens);
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
-    const fileMetadata = {
-      name: req.file.originalname,
-      parents: [] // You could specify a folder ID here
-    };
+    try {
+      const tokens = JSON.parse(tokensStr);
+      oauth2Client.setCredentials(tokens);
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-    const media = {
-      mimeType: req.file.mimetype,
-      body: fs.createReadStream(req.file.path)
-    };
+      const fileMetadata = {
+        name: req.file.originalname,
+        parents: [] // You could specify a folder ID here
+      };
 
-    const response = await drive.files.create({
-      requestBody: fileMetadata,
-      media: media,
-      fields: 'id, webViewLink, webContentLink'
-    });
+      const media = {
+        mimeType: req.file.mimetype,
+        body: fs.createReadStream(req.file.path)
+      };
 
-    // Make file readable by anyone with the link for preview
-    await drive.permissions.create({
-      fileId: response.data.id!,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone'
-      }
-    });
+      const response = await drive.files.create({
+        requestBody: fileMetadata,
+        media: media,
+        fields: 'id, webViewLink, webContentLink'
+      });
 
-    // Clean up local file
-    fs.unlinkSync(req.file.path);
+      // Make file readable by anyone with the link for preview
+      await drive.permissions.create({
+        fileId: response.data.id!,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone'
+        }
+      });
 
-    res.json({
-      id: response.data.id,
-      viewLink: response.data.webViewLink,
-      downloadLink: response.data.webContentLink
-    });
-  } catch (error) {
-    console.error("Drive Upload Error:", error);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: "Failed to upload to Google Drive" });
-  }
+      // Clean up local file
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        id: response.data.id,
+        viewLink: response.data.webViewLink,
+        downloadLink: response.data.webContentLink
+      });
+    } catch (error) {
+      console.error("Drive Upload Error:", error);
+      if (req.file) fs.unlinkSync(req.file.path);
+      res.status(500).json({ error: "Failed to upload to Google Drive" });
+    }
+  });
 });
 
 // Global Error Handler for API

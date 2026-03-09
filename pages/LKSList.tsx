@@ -91,6 +91,13 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
   };
 
   const handleFileUpload = async (field: keyof LKSDocuments, file: File) => {
+    // Check file size (limit to 2MB as requested)
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB
+    if (file.size > MAX_SIZE) {
+      alert(`Berkas terlalu besar (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maksimal ukuran berkas adalah 2MB. Silakan kompres PDF Anda terlebih dahulu jika terlalu besar.`);
+      return;
+    }
+
     setIsUploading(field);
     
     try {

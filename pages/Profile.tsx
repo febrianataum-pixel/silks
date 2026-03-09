@@ -240,10 +240,11 @@ const Profile: React.FC<ProfileProps> = ({
                   <AlertTriangle className="text-amber-600 shrink-0" size={20} />
                   <div>
                     <p className="text-[10px] text-amber-700 font-black uppercase leading-relaxed">
-                      MASALAH KONEKSI / COOKIE?
+                      MASALAH KONEKSI / COOKIE? (ERROR: COOKIE CHECK)
                     </p>
                     <p className="text-[9px] text-amber-600 font-bold mt-1">
-                      Jika Anda melihat error "Cookie check", silakan klik tombol di samping untuk memverifikasi sesi Anda di tab baru.
+                      Browser memblokir cookie keamanan karena aplikasi berjalan di dalam frame. 
+                      Klik tombol di samping untuk membuka aplikasi di tab baru, lalu coba unggah kembali.
                     </p>
                   </div>
                 </div>
@@ -251,10 +252,44 @@ const Profile: React.FC<ProfileProps> = ({
                   onClick={() => window.open(window.location.href, '_blank')}
                   className="px-6 py-3 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-all whitespace-nowrap"
                 >
-                  VERIFIKASI SESI (TAB BARU)
+                  BUKA DI TAB BARU (SOLUSI)
                 </button>
               </div>
             )}
+            
+            <div className="mt-8 p-6 bg-slate-50 border border-slate-100 rounded-[2rem]">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Info size={14} /> Informasi Debugging
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[9px] font-bold text-slate-500 uppercase tracking-tight">
+                <div className="flex justify-between border-b pb-2">
+                  <span>Status Firebase:</span>
+                  <span className={cloudConfig?.apiKey ? 'text-emerald-600' : 'text-rose-600'}>
+                    {cloudConfig?.apiKey ? 'TERKONFIGURASI' : 'BELUM SET'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span>Status Google:</span>
+                  <span className={isGoogleConnected ? 'text-emerald-600' : 'text-slate-400'}>
+                    {isGoogleConnected ? 'TERHUBUNG' : 'DISCONNECTED'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span>Penyimpanan Aktif:</span>
+                  <span className="text-blue-600">
+                    {cloudConfig?.apiKey ? 'FIREBASE' : isGoogleConnected ? 'GOOGLE DRIVE' : 'LOCAL STORAGE'}
+                  </span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span>Batas Ukuran File:</span>
+                  <span className="text-slate-800">2 MB</span>
+                </div>
+              </div>
+              <p className="mt-4 text-[8px] text-slate-400 font-medium italic">
+                * Jika unggah PDF gagal tanpa pesan error, pastikan file tidak rusak dan ukuran di bawah 2MB.
+                Untuk Firebase, pastikan CORS sudah diatur di Google Cloud Console.
+              </p>
+            </div>
           </div>
         </div>
       )}
