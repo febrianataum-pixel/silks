@@ -27,11 +27,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// Helper to check Google Config
+const checkGoogleConfig = () => {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+};
+
 // Google Auth URL
 app.get("/api/auth/google/url", (req, res) => {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  if (!checkGoogleConfig()) {
     return res.status(400).json({ 
-      error: "Konfigurasi Google OAuth belum lengkap. Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah diatur di Environment Variables." 
+      error: "Konfigurasi Google OAuth belum lengkap. Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah diatur di file .env." 
     });
   }
 
@@ -84,6 +89,13 @@ app.get("/auth/google/callback", async (req, res) => {
 
 // Upload to Google Drive
 app.post("/api/upload/google-drive", upload.single('file'), async (req, res) => {
+  if (!checkGoogleConfig()) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    return res.status(500).json({ 
+      error: "Konfigurasi Google Drive di server belum lengkap (GOOGLE_CLIENT_ID/SECRET kosong)." 
+    });
+  }
+
   const tokensStr = req.cookies.google_tokens;
   if (!tokensStr) {
     return res.status(401).json({ error: "Not authenticated with Google" });
@@ -136,6 +148,15 @@ app.post("/api/upload/google-drive", upload.single('file'), async (req, res) => 
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: "Failed to upload to Google Drive" });
   }
+});
+
+// Global Error Handler for API
+app.use("/api", (err: any, req: any, res: any, next: any) => {
+  console.error("API Error:", err);
+  res.status(err.status || 500).json({
+    error: err.message || "Internal Server Error",
+    details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // Vite middleware for development

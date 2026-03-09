@@ -141,7 +141,8 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
       } else {
         const text = await response.text();
         console.error("Server returned non-JSON response:", text);
-        throw new Error("Server mengembalikan respon yang tidak valid (Bukan JSON).");
+        const snippet = text.substring(0, 100);
+        throw new Error(`Server error (Bukan JSON): ${response.status} ${response.statusText}. Pesan: ${snippet}...`);
       }
     } catch (error: any) {
       console.error("Upload Error:", error);

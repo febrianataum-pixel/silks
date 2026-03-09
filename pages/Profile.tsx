@@ -121,7 +121,8 @@ const Profile: React.FC<ProfileProps> = ({
       } else {
         const text = await response.text();
         console.error("Server returned non-JSON response:", text);
-        throw new Error("Server mengembalikan respon yang tidak valid (Bukan JSON). Pastikan server berjalan dengan benar.");
+        const snippet = text.substring(0, 100);
+        throw new Error(`Server error (Bukan JSON): ${response.status} ${response.statusText}. Pesan: ${snippet}...`);
       }
     } catch (error: any) {
       alert(error.message || "Gagal mengambil URL autentikasi Google.");
