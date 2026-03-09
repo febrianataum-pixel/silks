@@ -137,7 +137,8 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'include'
       });
 
       const contentType = response.headers.get("content-type");
@@ -168,16 +169,21 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
         }));
 
         if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} Berhasil`);
-        alert("Berkas berhasil diunggah ke Google Drive.");
+        alert(`Berkas berhasil diunggah ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
       } else {
         const text = await response.text();
         console.error("Server returned non-JSON response:", text);
+        
+        if (text.includes("Cookie check") || text.includes("Authenticate in new window")) {
+          throw new Error("Browser memblokir cookie keamanan. Silakan buka aplikasi di tab baru atau klik 'Authenticate in new window' jika muncul.");
+        }
+        
         const snippet = text.substring(0, 100);
         throw new Error(`Server error (Bukan JSON): ${response.status} ${response.statusText}. Pesan: ${snippet}...`);
       }
     } catch (error: any) {
       console.error("Upload Error:", error);
-      alert(error.message || "Gagal mengunggah berkas ke Google Drive.");
+      alert(error.message || `Gagal mengunggah berkas ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
     } finally {
       setIsUploading(null);
     }

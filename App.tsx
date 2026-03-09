@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, Building2, Users, Menu, X, ChevronRight, LogOut, Bell, FileText, ClipboardList, UserCircle, ChevronLeft, Trash2, Clock, CheckCircle2, Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle, SearchCode, Filter } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import LKSList from './pages/LKSList';
@@ -107,6 +108,19 @@ const App: React.FC = () => {
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
 
   useEffect(() => {
+    const checkGoogleStatus = async () => {
+      try {
+        const response = await fetch('/api/auth/google/status');
+        if (response.ok) {
+          const data = await response.json();
+          setIsGoogleConnected(data.connected);
+        }
+      } catch (err) {
+        console.error("Failed to check Google status:", err);
+      }
+    };
+    checkGoogleStatus();
+
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
         setIsGoogleConnected(true);
@@ -371,117 +385,103 @@ const App: React.FC = () => {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={24} /> },
+    { id: 'lks', label: 'Data LKS', icon: <Building2 size={24} /> },
+    { id: 'administrasi', label: 'Administrasi', icon: <ClipboardList size={24} /> },
+    { id: 'pm', label: 'Penerima Manfaat', icon: <Users size={24} /> },
+    { id: 'pencarian', label: 'Pencarian PM', icon: <Filter size={24} /> },
+    { id: 'rekomendasi', label: 'Rekomendasi', icon: <FileText size={24} /> },
+    { id: 'profile', label: 'Profil Saya', icon: <UserCircle size={24} /> },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden font-inter relative">
-      {/* SIDEBAR - Hanya untuk Desktop */}
-      <aside className={`fixed inset-y-0 left-0 z-50 bg-slate-900 text-white transform transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 hidden lg:flex flex-col no-print ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
-        <div className="h-full flex flex-col relative">
-          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="absolute -right-3 top-20 w-6 h-6 bg-blue-600 rounded-full items-center justify-center text-white border-4 border-slate-50 z-50 hover:scale-110 transition-transform shadow-lg">
-            {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
-          <div className={`p-6 flex items-center gap-3 transition-all duration-300 ${isSidebarCollapsed ? 'px-4' : 'px-6'}`}>
-            <div className="shrink-0">
-              {appLogo ? <img src={appLogo} alt="Logo" className="w-10 h-10 object-contain rounded-lg bg-white p-1" /> : <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-900/40">{appName.charAt(0)}</div>}
-            </div>
-            {!isSidebarCollapsed && (
-              <div className="animate-in fade-in duration-300">
-                <h1 className="font-black text-sm leading-tight tracking-tight uppercase whitespace-nowrap">{appName}</h1>
-                <p className="text-[10px] text-slate-500 font-bold tracking-widest uppercase">Kab. Blora</p>
+    <div className="h-screen bg-[#F5F5F7] flex flex-col overflow-hidden font-inter relative">
+      {/* macOS Menu Bar (Top) */}
+      <header className="h-8 bg-white/70 backdrop-blur-xl border-b border-black/5 flex items-center justify-between px-4 sticky top-0 z-50 no-print select-none">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 mr-2">
+            <div className="w-3 h-3 rounded-full bg-[#FF5F57] border border-black/5"></div>
+            <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/5"></div>
+            <div className="w-3 h-3 rounded-full bg-[#28C840] border border-black/5"></div>
+          </div>
+          <div className="flex items-center gap-4 text-[13px] font-semibold text-slate-800">
+            <span className="font-black">{appName}</span>
+            <span className="font-medium opacity-60 hidden sm:inline">File</span>
+            <span className="font-medium opacity-60 hidden sm:inline">Edit</span>
+            <span className="font-medium opacity-60 hidden sm:inline">View</span>
+            <span className="font-medium opacity-60 hidden sm:inline">Window</span>
+            <span className="font-medium opacity-60 hidden sm:inline">Help</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-[13px] font-semibold text-slate-800">
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-500' : syncStatus === 'syncing' ? 'bg-blue-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+            <span className="text-[10px] opacity-60 uppercase tracking-tight">{syncStatus}</span>
+          </div>
+          <span className="opacity-60">{new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {/* Sub Header / Window Title Bar */}
+        <header className="h-16 bg-white/40 backdrop-blur-md border-b border-black/5 flex items-center justify-between px-6 lg:px-10 z-40 no-print">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{activePage.charAt(0).toUpperCase() + activePage.slice(1)}</h2>
+            {storageError && (
+              <div className="flex items-center gap-1.5 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
+                <AlertCircle size={12} className="text-rose-600" />
+                <p className="text-[10px] text-rose-700 font-bold uppercase tracking-tight">{storageError}</p>
               </div>
             )}
           </div>
-          <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto no-scrollbar">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-              { id: 'lks', label: 'Data LKS', icon: <Building2 size={20} /> },
-              { id: 'administrasi', label: 'Administrasi', icon: <ClipboardList size={20} /> },
-              { id: 'pm', label: 'Penerima Manfaat', icon: <Users size={20} /> },
-              { id: 'pencarian', label: 'Pencarian PM', icon: <Filter size={20} /> },
-              { id: 'rekomendasi', label: 'Rekomendasi', icon: <FileText size={20} /> },
-              { id: 'profile', label: 'Profil Saya', icon: <UserCircle size={20} /> },
-            ].map((item) => (
-              <button key={item.id} onClick={() => { setActivePage(item.id as Page); setNavContext(null); }} className={`w-full flex items-center transition-all group rounded-2xl relative ${isSidebarCollapsed ? 'justify-center py-4 px-0' : 'px-4 py-3.5 gap-3'} ${activePage === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
-                <div className={`${activePage === item.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform duration-300`}>{item.icon}</div>
-                {!isSidebarCollapsed && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
-              </button>
-            ))}
-          </nav>
-          <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-            <button onClick={handleLogout} className={`flex items-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl mb-2 ${isSidebarCollapsed ? 'justify-center w-full py-4' : 'px-4 py-3 gap-3 w-full'}`}><LogOut size={20} />{!isSidebarCollapsed && <span className="font-bold text-sm">Keluar Sesi</span>}</button>
-            <div className={`px-4 pt-2 flex ${isSidebarCollapsed ? 'justify-center' : 'justify-start'}`}>
-               <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest leading-none select-none">{APP_VERSION}</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col min-0 overflow-hidden relative pb-20 lg:pb-0">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 no-print">
-          <div className="flex items-center gap-6">
-            <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activePage.toUpperCase()}</h2>
-              <div className="flex items-center gap-4 mt-1">
-                <div className="flex items-center gap-1.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-500' : syncStatus === 'syncing' ? 'bg-blue-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-slate-300'}`}></div>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                    {syncStatus === 'connected' ? 'Cloud Connected' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync Error' : 'Local Mode'}
-                  </p>
-                </div>
-                {storageError && (
-                  <div className="flex items-center gap-1.5 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 animate-pulse">
-                    <AlertCircle size={10} className="text-rose-500" />
-                    <p className="text-[8px] text-rose-600 font-black uppercase tracking-tighter">{storageError}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          
           <div className="flex items-center gap-3">
              <div className="relative">
-                <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-3 bg-slate-50 text-slate-500 rounded-2xl hover:bg-slate-100 transition-all relative group">
-                  <Bell size={20} />
-                  {unreadCount > 0 && <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">{unreadCount}</span>}
+                <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-2.5 bg-white/50 text-slate-600 rounded-xl hover:bg-white/80 transition-all relative group border border-black/5 shadow-sm">
+                  <Bell size={18} />
+                  {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">{unreadCount}</span>}
                 </button>
-                {showNotifPanel && (
-                  <div className="absolute top-16 right-0 w-80 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 z-[100] animate-in slide-in-from-top-4 duration-300 overflow-hidden">
-                    <div className="p-6 border-b flex items-center justify-between bg-slate-50/50">
-                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-800">Pemberitahuan</h4>
-                      <button onClick={() => { setNotifications(notifications.map(n => ({...n, isRead: true}))); setShowNotifPanel(false); }} className="text-[9px] font-black text-blue-600 uppercase hover:underline">Baca Semua</button>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto no-scrollbar">
-                      {notifications.length > 0 ? notifications.map(n => (
-                        <div key={n.id} className={`p-4 border-b last:border-0 transition-colors ${n.isRead ? 'opacity-60' : 'bg-blue-50/30'}`}>
-                          <div className="flex gap-3">
-                             <div>
-                               <p className="text-xs font-bold text-slate-800"><span className="text-blue-600">{n.user}</span> {n.action} <span className="text-slate-900 font-black">{n.target}</span></p>
-                               <p className="text-[9px] text-slate-400 font-medium mt-1 uppercase">{n.time.toLocaleTimeString('id-ID')}</p>
-                             </div>
+                <AnimatePresence>
+                  {showNotifPanel && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute top-12 right-0 w-80 bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-black/5 z-[100] overflow-hidden"
+                    >
+                      <div className="p-5 border-b border-black/5 flex items-center justify-between bg-white/50">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-500">Notifications</h4>
+                        <button onClick={() => { setNotifications(notifications.map(n => ({...n, isRead: true}))); setShowNotifPanel(false); }} className="text-[10px] font-bold text-blue-600 hover:underline">Clear All</button>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto no-scrollbar">
+                        {notifications.length > 0 ? notifications.map(n => (
+                          <div key={n.id} className={`p-4 border-b border-black/5 last:border-0 transition-colors ${n.isRead ? 'opacity-50' : 'bg-blue-500/5'}`}>
+                            <p className="text-xs font-medium text-slate-800"><span className="font-bold text-blue-600">{n.user}</span> {n.action} <span className="font-bold">{n.target}</span></p>
+                            <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase">{n.time.toLocaleTimeString('id-ID')}</p>
                           </div>
-                        </div>
-                      )) : (
-                        <div className="p-10 text-center text-slate-300 italic text-xs font-medium">Belum ada aktivitas baru.</div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                        )) : (
+                          <div className="p-10 text-center text-slate-400 italic text-xs">No new notifications</div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
              </div>
-             <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl hidden md:flex">
-               {syncStatus === 'connected' ? <Cloud size={20} className="text-blue-500" /> : <CloudOff size={20} />}
-             </div>
-             <button onClick={() => setActivePage('profile')} className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-4 rounded-[1.5rem] transition-all border border-transparent">
-                <div className="w-10 h-10 rounded-2xl ring-2 ring-slate-100 overflow-hidden shadow-sm">
+             
+             <button onClick={() => setActivePage('profile')} className="flex items-center gap-2.5 hover:bg-white/50 p-1 pr-3 rounded-2xl transition-all border border-transparent hover:border-black/5">
+                <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm border border-black/10">
                    {currentUser?.avatar ? <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" /> : <img src={`https://ui-avatars.com/api/?name=${currentUser?.nama}&background=2563eb&color=fff`} alt="Avatar" />}
                 </div>
                 <div className="hidden md:block text-left">
-                   <p className="text-[13px] font-black text-slate-900 leading-none mb-1">{currentUser?.nama}</p>
-                   <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{currentUser?.role}</p>
+                   <p className="text-[12px] font-bold text-slate-900 leading-none">{currentUser?.nama}</p>
                 </div>
              </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 lg:p-10 no-scrollbar">
-          <div className="max-w-7xl mx-auto pb-20 lg:pb-10">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+          <div className="max-w-7xl mx-auto pb-32">
             {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} onNavigateToItem={handleNavigateToDetail} />}
             {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={addNotification} appLogo={appLogo} isGoogleConnected={isGoogleConnected} />}
             {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={addNotification} isGoogleConnected={isGoogleConnected} />}
@@ -504,7 +504,6 @@ const App: React.FC = () => {
                 forcePush={() => {
                   if (!db || !cloudConfig) return;
                   setSyncStatus('syncing');
-                  // Trigger the sync effect
                   setDoc(doc(db, 'projects', cloudConfig.projectId), { lastSync: new Date().toISOString() }, { merge: true });
                 }}
               />
@@ -512,26 +511,49 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* MOBILE BOTTOM NAVIGATION */}
-        <nav className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-4 lg:hidden z-[100] no-print shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.1)] rounded-t-[2.5rem]">
-          {[
-            { id: 'dashboard', icon: <LayoutDashboard size={24} /> },
-            { id: 'lks', icon: <Building2 size={24} /> },
-            { id: 'pm', icon: <Users size={24} /> },
-            { id: 'pencarian', icon: <Filter size={24} /> },
-            { id: 'profile', icon: <UserCircle size={24} /> },
-          ].map((item) => (
-            <button 
-              key={item.id} 
-              onClick={() => { setActivePage(item.id as Page); setNavContext(null); }}
-              className={`p-3 transition-all duration-300 relative rounded-2xl ${activePage === item.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-400'}`}
+        {/* macOS Dock */}
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] no-print">
+          <motion.nav 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="flex items-end gap-2 px-3 py-3 bg-white/40 backdrop-blur-2xl border border-white/40 rounded-[1.5rem] shadow-2xl shadow-black/10 relative"
+          >
+            {navItems.map((item) => (
+              <div key={item.id} className="relative group">
+                <motion.button 
+                  whileHover={{ scale: 1.2, y: -10 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setActivePage(item.id as Page); setNavContext(null); }}
+                  className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all relative ${activePage === item.id ? 'bg-white shadow-lg text-blue-600' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  {item.icon}
+                  {activePage === item.id && (
+                    <motion.div 
+                      layoutId="dock-indicator"
+                      className="absolute -bottom-1.5 w-1 h-1 bg-slate-900 rounded-full"
+                    />
+                  )}
+                </motion.button>
+                
+                {/* Tooltip */}
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                  {item.label}
+                </div>
+              </div>
+            ))}
+            
+            <div className="w-[1px] h-8 bg-black/10 mx-1 self-center" />
+            
+            <motion.button 
+              whileHover={{ scale: 1.2, y: -10 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleLogout}
+              className="w-12 h-12 flex items-center justify-center rounded-xl text-slate-400 hover:text-red-500 transition-all"
             >
-              <div className={`${activePage === item.id ? 'scale-110' : ''} transition-transform`}>{item.icon}</div>
-              {activePage === item.id && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>}
-            </button>
-          ))}
-        </nav>
-
+              <LogOut size={24} />
+            </motion.button>
+          </motion.nav>
+        </div>
       </main>
     </div>
   );

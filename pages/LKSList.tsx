@@ -116,26 +116,41 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 401) {
-          alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
-        } else {
-          throw new Error(errorData.error || "Gagal upload ke Google Drive");
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const uploadData = await response.json();
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            alert("Silakan hubungkan Google Drive Anda terlebih dahulu di menu Profil.");
+          } else {
+            throw new Error(uploadData.error || "Gagal upload ke Google Drive");
+          }
+          return;
         }
-        return;
-      }
 
-      const data = await response.json();
-      // Store the view link in the document field
-      handleChange(`dokumen.${field}`, data.viewLink);
-      if (onNotify) onNotify('Upload Berkas', `${field} Berhasil`);
+        // Store the view link in the document field
+        handleChange(`dokumen.${field}`, uploadData.viewLink);
+        if (onNotify) onNotify('Upload Berkas', `${field} Berhasil`);
+        alert(`Berkas berhasil diunggah ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
+      } else {
+        const text = await response.text();
+        console.error("Server returned non-JSON response:", text);
+        
+        if (text.includes("Cookie check") || text.includes("Authenticate in new window")) {
+          throw new Error("Browser memblokir cookie keamanan. Silakan buka aplikasi di tab baru atau klik 'Authenticate in new window' jika muncul.");
+        }
+        
+        const snippet = text.substring(0, 100);
+        throw new Error(`Server error (Bukan JSON): ${response.status} ${response.statusText}. Pesan: ${snippet}...`);
+      }
     } catch (error: any) {
       console.error("Upload Error:", error);
-      alert(error.message || "Gagal mengunggah berkas ke Google Drive.");
+      alert(error.message || `Gagal mengunggah berkas ke ${isGoogleConnected ? 'Google Drive' : 'Penyimpanan Lokal'}.`);
     } finally {
       setIsUploading(null);
     }
