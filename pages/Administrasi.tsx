@@ -5,17 +5,19 @@ import {
   ShieldCheck, UserCheck, FileText, Award, AlertCircle, 
   ExternalLink, Eye, Info, X, FileSearch, MapPin, Download,
   Fingerprint, Calendar, CheckCircle2, Maximize2, Loader2,
-  ExternalLink as OpenIcon, Trash2, FileType, UploadCloud, Upload
+  ExternalLink as OpenIcon, Trash2, FileType, UploadCloud, Upload, Cloud
 } from 'lucide-react';
 import { LKS, LKSDocuments } from '../types';
+import { uploadFile, storage } from '../firebase';
 
 interface AdministrasiPageProps {
   data: LKS[];
   setData: React.Dispatch<React.SetStateAction<LKS[]>>;
   onNotify?: (action: string, target: string) => void;
+  isGoogleConnected?: boolean;
 }
 
-const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNotify }) => {
+const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNotify, isGoogleConnected }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'lengkap' | 'belum'>('all');
   const [previewDoc, setPreviewDoc] = useState<{ 
@@ -31,7 +33,7 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
   const [isUploading, setIsUploading] = useState<{lksId: string, docKey: string} | null>(null);
 
   useEffect(() => {
-    if (previewDoc?.fileData?.startsWith('http')) {
+    if (previewDoc?.fileData?.startsWith('http') || previewDoc?.fileData?.startsWith('/uploads')) {
       setPdfUrl(previewDoc.fileData);
       setIsLoadingPdf(false);
     } else if (previewDoc?.fileData?.startsWith('data:application/pdf')) {
@@ -100,11 +102,40 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
 
   const handleFileUpload = async (lks: LKS, field: keyof LKSDocuments, file: File) => {
     setIsUploading({ lksId: lks.id, docKey: field });
+    
+    // Priority: 1. Firebase Storage (if configured), 2. Google Drive, 3. Local
+    if (storage) {
+      try {
+        const path = `dokumen/${lks.id}/${field}_${Date.now()}_${file.name}`;
+        const downloadUrl = await uploadFile(file, path);
+        
+        setData(prev => prev.map(item => {
+          if (item.id === lks.id) {
+            return {
+              ...item,
+              dokumen: { ...item.dokumen, [field]: downloadUrl }
+            };
+          }
+          return item;
+        }));
+
+        if (onNotify) onNotify('Upload Berkas', `${field} - ${lks.nama} (Firebase)`);
+        alert("Berkas berhasil diunggah ke Firebase Storage.");
+        setIsUploading(null);
+        return;
+      } catch (error: any) {
+        console.error("Firebase Upload Error:", error);
+        // Fallback to other methods if Firebase fails
+      }
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
+    const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
+
     try {
-      const response = await fetch('/api/upload/google-drive', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData
       });
@@ -183,16 +214,22 @@ const AdministrasiPage: React.FC<AdministrasiPageProps> = ({ data, setData, onNo
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
         </div>
-        <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border w-full lg:w-auto">
-          {(['all', 'lengkap', 'belum'] as const).map(f => (
-            <button 
-              key={f} 
-              onClick={() => setStatusFilter(f)} 
-              className={`flex-1 lg:flex-none px-3 lg:px-5 py-2 rounded-lg text-[8px] lg:text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === f ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500'}`}
-            >
-              {f === 'all' ? 'Semua' : f === 'lengkap' ? 'Ok' : 'Kurang'}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${storage ? 'bg-blue-50 border-blue-100 text-blue-600' : isGoogleConnected ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-300'}`}>
+            {storage ? <Cloud size={14} /> : <UploadCloud size={14} />}
+            <span className="text-[9px] font-black uppercase tracking-widest">{storage ? 'Firebase Storage' : isGoogleConnected ? 'Google Drive' : 'Local Storage'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border w-full lg:w-auto">
+            {(['all', 'lengkap', 'belum'] as const).map(f => (
+              <button 
+                key={f} 
+                onClick={() => setStatusFilter(f)} 
+                className={`flex-1 lg:flex-none px-3 lg:px-5 py-2 rounded-lg text-[8px] lg:text-[10px] font-black uppercase tracking-widest transition-all ${statusFilter === f ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500'}`}
+              >
+                {f === 'all' ? 'Semua' : f === 'lengkap' ? 'Ok' : 'Kurang'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

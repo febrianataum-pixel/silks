@@ -6,10 +6,11 @@ import {
   FileCheck, AlertTriangle, FileBarChart, Map as MapIcon, Landmark, 
   Calendar, Phone, CheckCircle2, Loader2, DollarSign, FileType, 
   Activity, Compass, Upload, PenLine, Layout, ShieldCheck, Mail, Globe, User, Navigation,
-  Hash, MessageCircle, FileUp, Briefcase, FileOutput, FileInput
+  Hash, MessageCircle, FileUp, Briefcase, FileOutput, FileInput, Cloud
 } from 'lucide-react';
 import { LKS, LKSDocuments, BantuanLKS } from '../types';
 import { KECAMATAN_BLORA, JENIS_BANTUAN_LIST } from '../constants';
+import { uploadFile, storage } from '../firebase';
 
 declare const L: any;
 declare const html2pdf: any;
@@ -20,9 +21,10 @@ interface LKSListProps {
   initialSelectedId?: string;
   onNotify?: (action: string, target: string) => void;
   appLogo?: string | null;
+  isGoogleConnected?: boolean;
 }
 
-const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onNotify, appLogo }) => {
+const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onNotify, appLogo, isGoogleConnected }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLks, setSelectedLks] = useState<LKS | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -90,11 +92,29 @@ const LKSList: React.FC<LKSListProps> = ({ data, setData, initialSelectedId, onN
 
   const handleFileUpload = async (field: keyof LKSDocuments, file: File) => {
     setIsUploading(field);
+    
+    // Priority: 1. Firebase Storage, 2. Google Drive, 3. Local
+    if (storage && selectedLks) {
+      try {
+        const path = `dokumen/${selectedLks.id}/${field}_${Date.now()}_${file.name}`;
+        const downloadUrl = await uploadFile(file, path);
+        
+        handleChange(`dokumen.${field}`, downloadUrl);
+        if (onNotify) onNotify('Upload Berkas', `${field} (Firebase)`);
+        setIsUploading(null);
+        return;
+      } catch (error: any) {
+        console.error("Firebase Upload Error:", error);
+      }
+    }
+
     const formData = new FormData();
     formData.append('file', file);
 
+    const endpoint = isGoogleConnected ? '/api/upload/google-drive' : '/api/upload/local';
+
     try {
-      const response = await fetch('/api/upload/google-drive', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData
       });

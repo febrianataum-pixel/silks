@@ -13,8 +13,8 @@ import { MOCK_LKS, MOCK_PM, MOCK_USERS } from './constants';
 import { LKS, PenerimaManfaat as PMType, UserAccount, LetterRecord } from './types';
 
 // Firebase Imports
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, onSnapshot, setDoc, getDoc, collection, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
+import { doc, onSnapshot, setDoc, collection, writeBatch } from 'firebase/firestore';
 
 type Page = 'dashboard' | 'lks' | 'administrasi' | 'pm' | 'pencarian' | 'rekomendasi' | 'profile';
 
@@ -118,24 +118,19 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!cloudConfig?.apiKey || !cloudConfig?.projectId) {
+    // Priority: 1. Environment Variables, 2. Local Cloud Config
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || cloudConfig?.apiKey;
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || cloudConfig?.projectId;
+
+    if (!apiKey || !projectId || !db) {
       setSyncStatus('idle');
       return;
     }
 
     try {
-      const firebaseConfig = {
-        apiKey: cloudConfig.apiKey,
-        authDomain: `${cloudConfig.projectId}.firebaseapp.com`,
-        projectId: cloudConfig.projectId,
-      };
-
-      const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      const db = getFirestore(firebaseApp);
-      
-      const projectRef = doc(db, 'projects', cloudConfig.projectId);
-      const lksCol = collection(db, 'projects', cloudConfig.projectId, 'lks');
-      const pmCol = collection(db, 'projects', cloudConfig.projectId, 'pm');
+      const projectRef = doc(db, 'projects', projectId);
+      const lksCol = collection(db, 'projects', projectId, 'lks');
+      const pmCol = collection(db, 'projects', projectId, 'pm');
 
       // Listen to Config
       const unsubConfig = onSnapshot(projectRef, (snapshot) => {
@@ -179,14 +174,15 @@ const App: React.FC = () => {
         unsubPm();
       };
     } catch (err) {
-      console.error("Firebase Init Error:", err);
+      console.error("Firebase Sync Error:", err);
       setSyncStatus('error');
     }
   }, [cloudConfig]);
 
   // 1. Sync Config & Small Data
   useEffect(() => {
-    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || cloudConfig?.projectId;
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !projectId || !db) return;
 
     const configToSync = {
       appName, appLogo, allUsers, lettersData,
@@ -198,8 +194,7 @@ const App: React.FC = () => {
 
     const timeout = setTimeout(async () => {
       try {
-        const db = getFirestore();
-        const projectRef = doc(db, 'projects', cloudConfig.projectId);
+        const projectRef = doc(db, 'projects', projectId);
         await setDoc(projectRef, {
           ...configToSync,
           lastSync: new Date().toISOString()
@@ -215,7 +210,8 @@ const App: React.FC = () => {
 
   // 2. Optimized Partial Sync LKS
   useEffect(() => {
-    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || cloudConfig?.projectId;
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !projectId || !db) return;
 
     const timeout = setTimeout(async () => {
       const currentLksStr = JSON.stringify(lksData);
@@ -223,7 +219,6 @@ const App: React.FC = () => {
 
       setSyncStatus('syncing');
       try {
-        const db = getFirestore();
         const prevLks = lastSyncedLks.current ? JSON.parse(lastSyncedLks.current) as LKS[] : [];
         
         // Find changed or new
@@ -243,7 +238,7 @@ const App: React.FC = () => {
           for (let i = 0; i < changedLks.length; i += batchSize) {
             const batch = writeBatch(db);
             changedLks.slice(i, i + batchSize).forEach(lks => {
-              const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', lks.id);
+              const lksDoc = doc(db, 'projects', projectId, 'lks', lks.id);
               batch.set(lksDoc, lks, { merge: true });
             });
             await batch.commit();
@@ -253,7 +248,7 @@ const App: React.FC = () => {
           for (let i = 0; i < deletedLksIds.length; i += batchSize) {
             const batch = writeBatch(db);
             deletedLksIds.slice(i, i + batchSize).forEach(id => {
-              const lksDoc = doc(db, 'projects', cloudConfig.projectId, 'lks', id);
+              const lksDoc = doc(db, 'projects', projectId, 'lks', id);
               batch.delete(lksDoc);
             });
             await batch.commit();
@@ -273,7 +268,8 @@ const App: React.FC = () => {
 
   // 3. Optimized Partial Sync PM
   useEffect(() => {
-    if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || cloudConfig?.projectId;
+    if (syncStatus !== 'connected' || isRemoteUpdate.current || !projectId || !db) return;
 
     const timeout = setTimeout(async () => {
       const currentPmStr = JSON.stringify(pmData);
@@ -281,7 +277,6 @@ const App: React.FC = () => {
 
       setSyncStatus('syncing');
       try {
-        const db = getFirestore();
         const prevPm = lastSyncedPm.current ? JSON.parse(lastSyncedPm.current) as PMType[] : [];
         
         // Find changed or new
@@ -301,7 +296,7 @@ const App: React.FC = () => {
           for (let i = 0; i < changedPm.length; i += batchSize) {
             const batch = writeBatch(db);
             changedPm.slice(i, i + batchSize).forEach(pm => {
-              const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', pm.id);
+              const pmDoc = doc(db, 'projects', projectId, 'pm', pm.id);
               batch.set(pmDoc, pm, { merge: true });
             });
             await batch.commit();
@@ -311,7 +306,7 @@ const App: React.FC = () => {
           for (let i = 0; i < deletedPmIds.length; i += batchSize) {
             const batch = writeBatch(db);
             deletedPmIds.slice(i, i + batchSize).forEach(id => {
-              const pmDoc = doc(db, 'projects', cloudConfig.projectId, 'pm', id);
+              const pmDoc = doc(db, 'projects', projectId, 'pm', id);
               batch.delete(pmDoc);
             });
             await batch.commit();
@@ -488,8 +483,8 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 no-scrollbar">
           <div className="max-w-7xl mx-auto pb-20 lg:pb-10">
             {activePage === 'dashboard' && <Dashboard lks={lksData} pm={pmData} onNavigateToItem={handleNavigateToDetail} />}
-            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={addNotification} appLogo={appLogo} />}
-            {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={addNotification} />}
+            {activePage === 'lks' && <LKSList data={lksData} setData={setLksData} initialSelectedId={navContext?.type === 'LKS' ? navContext.id : undefined} onNotify={addNotification} appLogo={appLogo} isGoogleConnected={isGoogleConnected} />}
+            {activePage === 'administrasi' && <AdministrasiPage data={lksData} setData={setLksData} onNotify={addNotification} isGoogleConnected={isGoogleConnected} />}
             {activePage === 'pm' && <PenerimaManfaatPage lksData={lksData} pmData={pmData} setPmData={setPmData} initialSelectedPmId={navContext?.type === 'PM' ? navContext.id : undefined} onNotify={addNotification} />}
             {activePage === 'pencarian' && <AdvancedSearchPage lksData={lksData} pmData={pmData} />}
             {activePage === 'rekomendasi' && <RekomendasiPage lksData={lksData} letters={lettersData} setLetters={setLettersData} onNotify={addNotification} appLogo={appLogo} />}
@@ -507,10 +502,10 @@ const App: React.FC = () => {
                 setCloudConfig={setCloudConfig}
                 isGoogleConnected={isGoogleConnected}
                 forcePush={() => {
+                  if (!db || !cloudConfig) return;
                   setSyncStatus('syncing');
                   // Trigger the sync effect
-                  const db = getFirestore();
-                  setDoc(doc(db, 'projects', cloudConfig!.projectId), { lastSync: new Date().toISOString() }, { merge: true });
+                  setDoc(doc(db, 'projects', cloudConfig.projectId), { lastSync: new Date().toISOString() }, { merge: true });
                 }}
               />
             )}
