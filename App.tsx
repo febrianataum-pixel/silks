@@ -217,10 +217,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
 
-    const currentLksStr = JSON.stringify(lksData);
-    if (currentLksStr === lastSyncedLks.current) return;
-
     const timeout = setTimeout(async () => {
+      const currentLksStr = JSON.stringify(lksData);
+      if (currentLksStr === lastSyncedLks.current) return;
+
       setSyncStatus('syncing');
       try {
         const db = getFirestore();
@@ -266,7 +266,7 @@ const App: React.FC = () => {
         console.error("LKS Sync Error:", err);
         setSyncStatus('error');
       }
-    }, 2000);
+    }, 500);
 
     return () => clearTimeout(timeout);
   }, [lksData, cloudConfig, syncStatus]);
@@ -275,10 +275,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (syncStatus !== 'connected' || isRemoteUpdate.current || !cloudConfig) return;
 
-    const currentPmStr = JSON.stringify(pmData);
-    if (currentPmStr === lastSyncedPm.current) return;
-
     const timeout = setTimeout(async () => {
+      const currentPmStr = JSON.stringify(pmData);
+      if (currentPmStr === lastSyncedPm.current) return;
+
       setSyncStatus('syncing');
       try {
         const db = getFirestore();
@@ -324,7 +324,7 @@ const App: React.FC = () => {
         console.error("PM Sync Error:", err);
         setSyncStatus('error');
       }
-    }, 2000);
+    }, 500);
 
     return () => clearTimeout(timeout);
   }, [pmData, cloudConfig, syncStatus]);
